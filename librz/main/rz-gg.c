@@ -192,39 +192,27 @@ RZ_API int rz_main_rz_gg(int argc, const char **argv) {
 			}
 			free(arg);
 		} break;
-		case 'n': {
-			ut32 n = rz_num_math(NULL, opt.arg);
-			append = 1;
-			rz_egg_patch(egg, -1, (const ut8 *)&n, 4);
-		} break;
+		case 'n':
 		case 'N': {
 			ut64 n = rz_num_math(NULL, opt.arg);
-			rz_egg_patch(egg, -1, (const ut8 *)&n, 8);
+			// TODO: support big endian too
+			// (this is always little because rz_egg_setup is further below)
+			rz_egg_patch_num(egg, -1, n, c == 'N' ? 64 : 32);
 			append = 1;
 		} break;
-		case 'd': {
-			ut32 off, n;
-			char *p = strchr(opt.arg, ':');
-			if (p) {
-				*p = 0;
-				off = rz_num_math(NULL, opt.arg);
-				n = rz_num_math(NULL, p + 1);
-				*p = ':';
-				// TODO: honor endianness here
-				rz_egg_patch(egg, off, (const ut8 *)&n, 4);
-			} else {
-				eprintf("Missing colon in -d\n");
-			}
-		} break;
+		case 'd':
 		case 'D': {
 			char *p = strchr(opt.arg, ':');
 			if (p) {
+				*p = '\0';
 				ut64 n, off = rz_num_math(NULL, opt.arg);
+				*p = ':';
 				n = rz_num_math(NULL, p + 1);
-				// TODO: honor endianness here
-				rz_egg_patch(egg, off, (const ut8 *)&n, 8);
+				// TODO: support big endian too
+				// (this is always little because rz_egg_setup is further below)
+				rz_egg_patch_num(egg, off, n, c == 'D' ? 64 : 32);
 			} else {
-				eprintf("Missing colon in -d\n");
+				eprintf("Missing colon in -%c\n", c);
 			}
 		} break;
 		case 'S':
@@ -528,15 +516,19 @@ RZ_API int rz_main_rz_gg(int argc, const char **argv) {
 				eprintf("No format specified\n");
 				goto fail;
 			}
-			RzPrint *p = rz_print_new();
+			char *code = NULL;
 			ut64 tmpsz;
 			const ut8 *tmp = rz_buf_data(b, &tmpsz);
 			switch (*format) {
 			case 'c':
-				rz_print_code(p, 0, tmp, tmpsz, 'c');
+				code = rz_lang_byte_array(tmp, tmpsz, RZ_LANG_BYTE_ARRAY_C_CPP_BYTES);
+				printf("%s\n", code);
+				free(code);
 				break;
-			case 'j': // JavaScript
-				rz_print_code(p, 0, tmp, tmpsz, 'j');
+			case 'j': // json
+				code = rz_lang_byte_array(tmp, tmpsz, RZ_LANG_BYTE_ARRAY_JSON);
+				printf("%s\n", code);
+				free(code);
 				break;
 			case 'r':
 				if (show_str) {
@@ -555,7 +547,9 @@ RZ_API int rz_main_rz_gg(int argc, const char **argv) {
 				break;
 			case 'p': // PE
 				if (strlen(format) >= 2 && format[1] == 'y') { // Python
-					rz_print_code(p, 0, tmp, tmpsz, 'p');
+					code = rz_lang_byte_array(tmp, tmpsz, RZ_LANG_BYTE_ARRAY_PYTHON);
+					printf("%s\n", code);
+					free(code);
 				}
 				break;
 			case 'e': // ELF
@@ -566,7 +560,6 @@ RZ_API int rz_main_rz_gg(int argc, const char **argv) {
 				eprintf("unknown executable format (%s)\n", format);
 				goto fail;
 			}
-			rz_print_free(p);
 		}
 	}
 	if (fd != -1) {

@@ -85,10 +85,28 @@ RZ_API const char *rz_file_basename(const char *path) {
 	const char *ptr = rz_str_rchr(path, NULL, '/');
 	if (ptr) {
 		path = ptr + 1;
-	} else {
-		if ((ptr = rz_str_rchr(path, NULL, '\\'))) {
-			path = ptr + 1;
-		}
+	}
+#if __WINDOWS__
+	if ((ptr = rz_str_rchr(path, NULL, '\\'))) {
+		path = ptr + 1;
+	}
+#endif
+	return path;
+}
+
+/* \brief Returns file name from a path accepting both `/` and `\` as directory separators
+ *
+ * \param path Path of file to get the file name
+ * \return const char * Pointer to the file name
+ */
+RZ_API const char *rz_file_dos_basename(RZ_BORROW RZ_NONNULL const char *path) {
+	rz_return_val_if_fail(path, NULL);
+	const char *ptr = rz_str_rchr(path, NULL, '/');
+	if (ptr) {
+		path = ptr + 1;
+	}
+	if ((ptr = rz_str_rchr(path, NULL, '\\'))) {
+		path = ptr + 1;
 	}
 	return path;
 }
@@ -1163,6 +1181,28 @@ RZ_API bool rz_file_copy(const char *src, const char *dst) {
 	/* TODO: Use NO_CACHE for iOS dyldcache copying */
 #if HAVE_COPYFILE
 	return copyfile(src, dst, 0, COPYFILE_DATA | COPYFILE_XATTR) != -1;
+#elif HAVE_COPY_FILE_RANGE
+	int srcfd = open(src, O_RDONLY);
+	if (srcfd == -1) {
+		RZ_LOG_ERROR("rz_file_copy: Failed to open %s\n", src);
+		return false;
+	}
+	int mask = (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	int dstfd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, mask);
+	if (dstfd == -1) {
+		RZ_LOG_ERROR("rz_file_copy: Failed to open %s\n", dst);
+		close(srcfd);
+		return false;
+	}
+	/* copy_file_path can handle large file up to SSIZE_MAX
+	 * with optimised performances.
+	 */
+	off_t sz = lseek(srcfd, 0, SEEK_END);
+	lseek(srcfd, 0, SEEK_SET);
+	ssize_t ret = copy_file_range(srcfd, 0, dstfd, 0, SSIZE_MAX, 0);
+	close(dstfd);
+	close(srcfd);
+	return ret == sz;
 #elif __WINDOWS__
 	PWCHAR s = rz_utf8_to_utf16(src);
 	PWCHAR d = rz_utf8_to_utf16(dst);
@@ -1355,7 +1395,7 @@ RZ_API bool rz_file_is_deflated(RZ_NONNULL const char *src) {
 	bool ret = false;
 	unsigned char *header = (unsigned char *)rz_file_slurp_range(src, 0, 3, NULL);
 
-	if (!header || strlen((char *)header) != 3) {
+	if (!header || rz_str_nlen((char *)header, 3) != 3) {
 		goto return_goto;
 	}
 

@@ -12,7 +12,9 @@
 
 #include "core_private.h"
 
-#define is_in_range(at, from, sz) ((at) >= (from) && (at) < ((from) + (sz)))
+#define is_invalid_address_va(va, vaddr, paddr)  (((va) && (vaddr) == UT64_MAX) || (!(va) && (paddr) == UT64_MAX))
+#define is_invalid_address_va2(va, vaddr, paddr) (((va) != VA_FALSE && (vaddr) == UT64_MAX) || ((va) == VA_FALSE && (paddr) == UT64_MAX))
+#define is_in_range(at, from, sz)                ((at) >= (from) && (at) < ((from) + (sz)))
 
 #define VA_FALSE    0
 #define VA_TRUE     1
@@ -88,13 +90,7 @@ RZ_API void rz_core_bin_options_init(RzCore *core, RZ_OUT RzBinOptions *opts, in
 
 	bool patch_relocs = rz_config_get_b(core->config, "bin.relocs");
 
-	rz_bin_options_init(
-		opts,
-		fd,
-		baseaddr,
-		loadaddr,
-		patch_relocs,
-		core->bin->rawstr);
+	rz_bin_options_init(opts, fd, baseaddr, loadaddr, patch_relocs);
 
 	opts->obj_opts.elf_load_sections = rz_config_get_b(core->config, "elf.load.sections");
 	opts->obj_opts.elf_checks_sections = rz_config_get_b(core->config, "elf.checks.sections");
@@ -117,7 +113,6 @@ RZ_API void rz_core_bin_export_info(RzCore *core, int mode) {
 		return;
 	}
 	Sdb *db = sdb_ns(bf->sdb, "info", 0);
-	;
 	if (!db) {
 		return;
 	}
@@ -550,6 +545,9 @@ RZ_API bool rz_core_bin_apply_strings(RzCore *r, RzBinFile *binfile) {
 	RzListIter *iter;
 	RzBinString *string;
 	rz_list_foreach (l, iter, string) {
+		if (is_invalid_address_va(va, string->vaddr, string->paddr)) {
+			continue;
+		}
 		ut64 vaddr = rva(o, string->paddr, string->vaddr, va);
 		if (!rz_bin_string_filter(r->bin, string->string, string->length, vaddr)) {
 			continue;
@@ -719,6 +717,9 @@ RZ_API bool rz_core_bin_apply_entry(RzCore *core, RzBinFile *binfile, bool va) {
 			if (entry->hvaddr) {
 				hvaddr = rva(o, hpaddr, entry->hvaddr, va);
 			}
+		}
+		if (is_invalid_address_va(va, entry->vaddr, paddr)) {
+			continue;
 		}
 		ut64 at = rva(o, paddr, entry->vaddr, va);
 		const char *type = rz_bin_entry_type_string(entry->type);
@@ -950,6 +951,9 @@ RZ_API bool rz_core_bin_apply_sections(RzCore *core, RzBinFile *binfile, bool va
 		int va_sect = va ? VA_TRUE : VA_FALSE;
 		if (va && !(section->perm & RZ_PERM_R)) {
 			va_sect = VA_NOREBASE;
+		}
+		if (is_invalid_address_va2(va_sect, section->vaddr, section->paddr)) {
+			continue;
 		}
 		ut64 addr = rva(o, section->paddr, section->vaddr, va_sect);
 
@@ -1222,6 +1226,9 @@ RZ_API bool rz_core_bin_apply_relocs(RzCore *core, RzBinFile *binfile, bool va_b
 	char *sdb_module = NULL;
 	for (size_t i = 0; i < relocs->relocs_count; i++) {
 		RzBinReloc *reloc = relocs->relocs[i];
+		if (is_invalid_address_va(va, reloc->vaddr, reloc->paddr)) {
+			continue;
+		}
 		ut64 addr = rva(o, reloc->paddr, reloc->vaddr, va);
 		if ((is_section_reloc(reloc) || is_file_reloc(reloc))) {
 			/*
@@ -1266,6 +1273,9 @@ RZ_API bool rz_core_bin_apply_imports(RzCore *core, RzBinFile *binfile, bool va)
 		}
 		RzBinSymbol *sym = rz_bin_object_get_symbol_of_import(o, import);
 		if (!sym) {
+			continue;
+		}
+		if (is_invalid_address_va(va, sym->vaddr, sym->paddr)) {
 			continue;
 		}
 		ut64 addr = rva(o, sym->paddr, sym->vaddr, va ? VA_TRUE : VA_FALSE);
@@ -1445,6 +1455,9 @@ RZ_API bool rz_core_bin_apply_symbols(RzCore *core, RzBinFile *binfile, bool va)
 	RzBinSymbol *symbol;
 	rz_list_foreach (symbols, iter, symbol) {
 		if (!symbol->name) {
+			continue;
+		}
+		if (is_invalid_address_va(va, symbol->vaddr, symbol->paddr)) {
 			continue;
 		}
 		ut64 addr = rva(o, symbol->paddr, symbol->vaddr, va);
@@ -1673,7 +1686,7 @@ static RZ_NULLABLE RZ_BORROW const RzList *core_bin_strings(RzCore *r, RzBinFile
 	if (!plugin || !rz_config_get_i(r->config, "bin.strings")) {
 		return NULL;
 	}
-	if (plugin->name && !strcmp(plugin->name, "any") && !rz_config_get_i(r->config, "bin.rawstr")) {
+	if (plugin->name && !strcmp(plugin->name, "any")) {
 		return NULL;
 	}
 	return rz_bin_get_strings(r->bin);
@@ -1911,7 +1924,7 @@ static bool symbols_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput *state, 
 	RzListIter *iter;
 
 	rz_cmd_state_output_array_start(state);
-	rz_cmd_state_output_set_columnsf(state, "dXXssdss", "nth", "paddr", "vaddr", "bind", "type", "size", "lib", "name");
+	rz_cmd_state_output_set_columnsf(state, "dXXssnss", "nth", "paddr", "vaddr", "bind", "type", "size", "lib", "name");
 
 	rz_list_foreach (symbols, iter, symbol) {
 		if (!symbol->name) {
@@ -1943,11 +1956,19 @@ static bool symbols_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput *state, 
 			free(rz_symbol_name);
 			rz_symbol_name = tmp;
 		}
+		ut64 size = symbol->size;
+
+		char addr_value[20];
+		if (addr == UT64_MAX) {
+			rz_strf(addr_value, "----------");
+		} else {
+			rz_strf(addr_value, "0x%08" PFMT64x, addr);
+		}
 
 		switch (state->mode) {
 		case RZ_OUTPUT_MODE_QUIET:
-			rz_cons_printf("0x%08" PFMT64x " %d %s%s%s\n",
-				addr, (int)symbol->size,
+			rz_cons_printf("%s %" PFMT64u " %s%s%s\n",
+				addr_value, size,
 				sn.libname ? sn.libname : "", sn.libname ? " " : "",
 				rz_symbol_name);
 			break;
@@ -1964,22 +1985,27 @@ static bool symbols_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput *state, 
 			pj_ks(state->d.pj, "realname", symbol->name);
 			pj_ki(state->d.pj, "ordinal", symbol->ordinal);
 			pj_ks(state->d.pj, "bind", symbol->bind);
-			pj_kn(state->d.pj, "size", (ut64)symbol->size);
+			pj_kn(state->d.pj, "size", size);
 			pj_ks(state->d.pj, "type", symbol->type);
-			pj_kn(state->d.pj, "vaddr", addr);
-			pj_kn(state->d.pj, "paddr", symbol->paddr);
+			if (addr != UT64_MAX) {
+				pj_kn(state->d.pj, "vaddr", addr);
+			}
+			if (symbol->paddr != UT64_MAX) {
+				pj_kn(state->d.pj, "paddr", symbol->paddr);
+			}
 			pj_kb(state->d.pj, "is_imported", symbol->is_imported);
+			pj_ks(state->d.pj, "lib", rz_str_get(symbol->libname));
 			pj_end(state->d.pj);
 			break;
 		case RZ_OUTPUT_MODE_TABLE:
-			rz_table_add_rowf(state->d.t, "dXXssdss",
+			rz_table_add_rowf(state->d.t, "dXXssnss",
 				symbol->ordinal,
 				symbol->paddr,
 				addr,
 				symbol->bind ? symbol->bind : "NONE",
 				symbol->type ? symbol->type : "NONE",
-				symbol->size,
-				symbol->libname ? symbol->libname : "", // for 'is' libname empty
+				size,
+				rz_str_get(symbol->libname),
 				rz_str_get_null(rz_symbol_name));
 			break;
 		default:
@@ -2512,6 +2538,14 @@ RZ_API bool rz_core_bin_cur_section_print(RzCore *core, RzBinFile *bf, RzCmdStat
 	return rz_core_bin_sections_print(core, bf, state, &filter, hashes);
 }
 
+RZ_API bool rz_core_bin_cur_segment_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput *state, RzList *hashes) {
+	rz_return_val_if_fail(core && bf && state, false);
+
+	RzCoreBinFilter filter = { 0 };
+	filter.offset = core->offset;
+	return rz_core_bin_segments_print(core, bf, state, &filter, hashes);
+}
+
 RZ_API bool rz_core_bin_basefind_print(RzCore *core, ut32 pointer_size, RzCmdStateOutput *state) {
 	rz_return_val_if_fail(core && state, false);
 	RzListIter *it = NULL;
@@ -2616,6 +2650,7 @@ static bool strings_print(RzCore *core, RzCmdStateOutput *state, const RzList *l
 	RzBinString b64 = { 0 };
 	rz_list_foreach (list, iter, string) {
 		const char *section_name, *type_string;
+		char quiet_val[20];
 		ut64 paddr, vaddr;
 		paddr = string->paddr;
 		vaddr = obj ? rva(obj, paddr, string->vaddr, va) : paddr;
@@ -2747,7 +2782,12 @@ static bool strings_print(RzCore *core, RzCmdStateOutput *state, const RzList *l
 			break;
 		}
 		case RZ_OUTPUT_MODE_QUIET:
-			rz_cons_printf("0x%" PFMT64x " %d %d %s\n", vaddr,
+			if (vaddr == UT64_MAX) {
+				rz_strf(quiet_val, "----------");
+			} else {
+				rz_strf(quiet_val, "0x%" PFMT64x, vaddr);
+			}
+			rz_cons_printf("%s %d %d %s\n", quiet_val,
 				string->size, string->length, escaped_string);
 			break;
 		case RZ_OUTPUT_MODE_QUIETEST:
@@ -2812,7 +2852,8 @@ RZ_API bool rz_core_bin_whole_strings_print(RzCore *core, RzBinFile *bf, RzCmdSt
 		bf->rbin = core->bin;
 		new_bf = true;
 	}
-	RzList *l = rz_bin_raw_strings(bf, 0);
+	size_t min = rz_config_get_i(core->config, "bin.minstr");
+	RzList *l = rz_bin_file_strings(bf, min, true);
 	bool res = strings_print(core, state, l);
 	rz_list_free(l);
 	if (new_bf) {
@@ -2961,7 +3002,6 @@ RZ_API bool rz_core_bin_info_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput
 	PJ *pj = state->d.pj;
 	RzTable *t = state->d.t;
 	int i, j, u, v, uv;
-	Sdb *sdb_info = sdb_ns(obj->kv, "info", false);
 
 	switch (state->mode) {
 	case RZ_OUTPUT_MODE_QUIET:
@@ -3063,7 +3103,7 @@ RZ_API bool rz_core_bin_info_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput
 			pj_ki(pj, "pcalign", uv);
 		}
 
-		tmp_buf = sdb_get(sdb_info, "elf.relro", 0);
+		tmp_buf = sdb_get(obj->kv, "elf.relro", 0);
 		if (tmp_buf) {
 			pj_ks(pj, "relro", tmp_buf);
 			free(tmp_buf);
@@ -3171,7 +3211,7 @@ RZ_API bool rz_core_bin_info_print(RzCore *core, RzBinFile *bf, RzCmdStateOutput
 			rz_table_add_rowf(t, "sd", "pcalign", uv);
 		}
 
-		tmp_buf = sdb_get(sdb_info, "elf.relro", 0);
+		tmp_buf = sdb_get(obj->kv, "elf.relro", 0);
 		if (tmp_buf) {
 			rz_table_add_rowf(t, "ss", "relro", tmp_buf);
 			free(tmp_buf);
@@ -3797,46 +3837,37 @@ RZ_API bool rz_core_bin_class_methods_print(RzCore *core, RzBinFile *bf, RzCmdSt
 			continue;
 		}
 
-		switch (state->mode) {
-		case RZ_OUTPUT_MODE_QUIET:
-			rz_list_foreach (c->methods, iter2, sym) {
-				const char *name = sym->dname ? sym->dname : sym->name;
-				char *mflags = rz_core_bin_method_flags_str(sym->method_flags, 0);
+		rz_list_foreach (c->methods, iter2, sym) {
+			const char *name = sym->dname ? sym->dname : sym->name;
+			char *mflags = rz_core_bin_method_flags_str(sym->method_flags, 0);
+
+			switch (state->mode) {
+			case RZ_OUTPUT_MODE_QUIET:
 				rz_cons_printf("0x%08" PFMT64x " method %d %s %s %s\n", sym->vaddr, m, c->name, mflags, name);
-				free(mflags);
-				m++;
-			}
-			break;
-		case RZ_OUTPUT_MODE_QUIETEST:
-			rz_list_foreach (c->methods, iter2, sym) {
-				const char *name = sym->dname ? sym->dname : sym->name;
+				break;
+			case RZ_OUTPUT_MODE_QUIETEST:
 				rz_cons_printf("%s\n", name);
-			}
-			break;
-		case RZ_OUTPUT_MODE_JSON:
-			rz_list_foreach (c->methods, iter2, sym) {
+				break;
+			case RZ_OUTPUT_MODE_JSON:
 				pj_o(state->d.pj);
-				pj_ks(state->d.pj, "name", sym->name);
+				pj_ks(state->d.pj, "name", name);
 				pj_ks(state->d.pj, "class", c->name);
 				if (sym->method_flags) {
 					flags_to_json(state->d.pj, sym->method_flags);
 				}
 				pj_kN(state->d.pj, "addr", sym->vaddr);
 				pj_end(state->d.pj);
-			}
-			break;
-		case RZ_OUTPUT_MODE_TABLE:
-			rz_list_foreach (c->methods, iter2, sym) {
-				const char *name = sym->dname ? sym->dname : sym->name;
-				char *mflags = rz_core_bin_method_flags_str(sym->method_flags, 0);
+				break;
+			case RZ_OUTPUT_MODE_TABLE:
 				rz_table_add_rowf(state->d.t, "Xisss", sym->vaddr, m, c->name, mflags, name);
-				free(mflags);
-				m++;
+				break;
+			default:
+				rz_warn_if_reached();
+				break;
 			}
-			break;
-		default:
-			rz_warn_if_reached();
-			break;
+
+			free(mflags);
+			m++;
 		}
 	}
 	rz_cmd_state_output_array_end(state);
@@ -4171,14 +4202,14 @@ static void bin_pe_versioninfo(RzCore *r, PJ *pj, int mode) {
 }
 
 static void bin_elf_versioninfo_versym(RzCore *r, PJ *pj, int mode) {
-	if (IS_MODE_JSON(mode)) {
-		pj_o(pj);
-		pj_ka(pj, "versym");
-	}
-
 	Sdb *sdb = sdb_ns_path(r->sdb, "bin/cur/info/versioninfo/versym", 0);
 	if (!sdb) {
 		return;
+	}
+
+	if (IS_MODE_JSON(mode)) {
+		pj_o(pj);
+		pj_ka(pj, "versym");
 	}
 
 	const ut64 addr = sdb_num_get(sdb, "addr", 0);
@@ -4224,14 +4255,14 @@ static void bin_elf_versioninfo_versym(RzCore *r, PJ *pj, int mode) {
 }
 
 static void bin_elf_versioninfo_verneed(RzCore *r, PJ *pj, int mode) {
-	if (IS_MODE_JSON(mode)) {
-		pj_end(pj);
-		pj_ka(pj, "verneed");
-	}
-
 	Sdb *sdb = sdb_ns_path(r->sdb, "bin/cur/info/versioninfo/verneed", 0);
 	if (!sdb) {
 		return;
+	}
+
+	if (IS_MODE_JSON(mode)) {
+		pj_end(pj);
+		pj_ka(pj, "verneed");
 	}
 
 	const ut64 address = sdb_num_get(sdb, "addr", 0);
@@ -4828,12 +4859,12 @@ RZ_API char *rz_core_bin_pdb_get_filename(RzCore *core) {
 		return NULL;
 	}
 	// Check raw path for debug filename
-	bool file_found = rz_file_exists(rz_file_basename(info->debug_file_name));
+	bool file_found = rz_file_exists(info->debug_file_name);
 	if (file_found) {
-		return strdup(rz_file_basename(info->debug_file_name));
+		return strdup(info->debug_file_name);
 	}
 	// Check debug filename basename in current directory
-	char *basename = (char *)rz_file_basename(info->debug_file_name);
+	const char *basename = rz_file_dos_basename(info->debug_file_name);
 	file_found = rz_file_exists(basename);
 	if (file_found) {
 		return strdup(basename);
@@ -4850,9 +4881,8 @@ RZ_API char *rz_core_bin_pdb_get_filename(RzCore *core) {
 
 	// Last chance: Check if file is in downstream symbol store
 	const char *symstore_path = rz_config_get(core->config, "pdb.symstore");
-	const char *base_file = rz_file_basename(info->debug_file_name);
 	return rz_str_newf("%s" RZ_SYS_DIR "%s" RZ_SYS_DIR "%s" RZ_SYS_DIR "%s",
-		symstore_path, base_file, info->guid, base_file);
+		symstore_path, basename, info->guid, basename);
 }
 
 static void bin_memory_print_rec(RzCmdStateOutput *state, RzBinMem *mirror, const RzList *mems, int perms) {

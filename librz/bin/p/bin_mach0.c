@@ -112,7 +112,7 @@ static void process_constructors(RzBinFile *bf, RzList *ret, int bits) {
 			}
 			int read = rz_buf_read_at(bf->buf, sec->paddr, buf, sec->size);
 			if (read < sec->size) {
-				eprintf("process_constructors: cannot process section %s\n", sec->name);
+				RZ_LOG_ERROR("process_constructors: cannot process section %s\n", sec->name);
 				continue;
 			}
 			if (bits == 32) {
@@ -519,6 +519,7 @@ static RzBinInfo *info(RzBinFile *bf) {
 	ret->has_va = true;
 	ret->has_pi = MACH0_(is_pie)(bf->o->bin_obj);
 	ret->has_nx = MACH0_(has_nx)(bf->o->bin_obj);
+
 	return ret;
 }
 
@@ -560,7 +561,7 @@ static RzBuffer *create(RzBin *bin, const ut8 *code, int clen, const ut8 *data, 
 	RzBuffer *buf = rz_buf_new_with_bytes(NULL, 0);
 #ifndef RZ_BIN_MACH064
 	if (opt->bits == 64) {
-		eprintf("TODO: Please use mach064 instead of mach0\n");
+		RZ_LOG_ERROR("Please use mach064 instead of mach0\n");
 		free(buf);
 		return NULL;
 	}
@@ -848,6 +849,10 @@ static ut64 size(RzBinFile *bf) {
 	return off + len;
 }
 
+static RzList *strings(RzBinFile *bf) {
+	return rz_bin_file_strings(bf, 4, false);
+}
+
 RzBinPlugin rz_bin_plugin_mach0 = {
 	.name = "mach0",
 	.desc = "mach0 bin plugin",
@@ -865,6 +870,7 @@ RzBinPlugin rz_bin_plugin_mach0 = {
 	.sections = &sections,
 	.symbols = &symbols,
 	.imports = &imports,
+	.strings = &strings,
 	.size = &size,
 	.info = &info,
 	.header = MACH0_(mach_headerfields),

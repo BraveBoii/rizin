@@ -37,6 +37,20 @@ EXPECT=<<EOF
 EOF
 RUN
 
+NAME=avr ld/ldd
+FILE=malloc://4096
+CMDS=<<EOF
+e asm.arch=avr
+wx a984fc91a184
+pd 3
+EOF
+EXPECT=<<EOF
+            0x00000000      ldd   r10, Y+9
+            0x00000002      ld    r31, X
+            0x00000004      ldd   r10, Z+9
+EOF
+RUN
+
 NAME=avr DISasm: [sts] - jump check
 FILE=malloc://4096
 CMDS=<<EOF
@@ -811,7 +825,7 @@ EXPECT=<<EOF
 0x0000268c 138 fcn.0000268c
 0x00002a54 770 fcn.00002a54
 0x00002d56 286 fcn.00002d56
-0x00002ec8 16 fcn.00002ec8
+0x00002ec8 1682 fcn.00002ec8
 0x00002ed8 16 fcn.00002ed8
 0x00002ee8 16 fcn.00002ee8
 0x00002ef8 18 fcn.00002ef8
@@ -849,7 +863,6 @@ EXPECT=<<EOF
 0x00003486 4 fcn.00003486
 0x0000349e 174 fcn.0000349e
 0x0000354c 8 fcn.0000354c
-0x00003554 6 loc.00003554
 0x0000357a 68 fcn.0000357a
 0x000035be 22 fcn.000035be
 0x000035d4 8 fcn.000035d4

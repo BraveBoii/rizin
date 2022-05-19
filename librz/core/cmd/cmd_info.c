@@ -348,6 +348,17 @@ RZ_IPI RzCmdStatus rz_cmd_info_segments_handler(RzCore *core, int argc, const ch
 	return bool2status(res);
 }
 
+RZ_IPI RzCmdStatus rz_cmd_info_cur_segment_handler(RzCore *core, int argc, const char **argv, RzCmdStateOutput *state) {
+	GET_CHECK_CUR_BINFILE(core);
+	RzList *hashes = rz_list_new_from_array((const void **)argv + 1, argc - 1);
+	if (!hashes) {
+		return RZ_CMD_STATUS_ERROR;
+	}
+	bool res = rz_core_bin_cur_segment_print(core, bf, state, hashes);
+	rz_list_free(hashes);
+	return bool2status(res);
+}
+
 RZ_IPI RzCmdStatus rz_cmd_info_strings_handler(RzCore *core, int argc, const char **argv, RzCmdStateOutput *state) {
 	GET_CHECK_CUR_BINFILE(core);
 	return bool2status(rz_core_bin_strings_print(core, bf, state));
@@ -356,29 +367,6 @@ RZ_IPI RzCmdStatus rz_cmd_info_strings_handler(RzCore *core, int argc, const cha
 RZ_IPI RzCmdStatus rz_cmd_info_whole_strings_handler(RzCore *core, int argc, const char **argv, RzCmdStateOutput *state) {
 	RzBinFile *bf = rz_bin_cur(core->bin);
 	return bool2status(rz_core_bin_whole_strings_print(core, bf, state));
-}
-
-RZ_IPI RzCmdStatus rz_cmd_info_dump_strings_handler(RzCore *core, int argc, const char **argv, RzCmdStateOutput *state) {
-	GET_CHECK_CUR_BINFILE(core);
-	int min = rz_config_get_i(core->config, "bin.minstr");
-	int strmode = bf->strmode;
-	switch (state->mode) {
-	case RZ_OUTPUT_MODE_JSON:
-		bf->strmode = RZ_MODE_JSON;
-		break;
-	case RZ_OUTPUT_MODE_TABLE:
-		bf->strmode = RZ_MODE_PRINT;
-		break;
-	case RZ_OUTPUT_MODE_QUIET:
-		bf->strmode = RZ_MODE_SIMPLE;
-		break;
-	default:
-		rz_warn_if_reached();
-		break;
-	}
-	rz_bin_dump_strings(bf, min, 2);
-	bf->strmode = strmode;
-	return RZ_CMD_STATUS_OK;
 }
 
 RZ_IPI RzCmdStatus rz_cmd_info_purge_string_handler(RzCore *core, int argc, const char **argv) {

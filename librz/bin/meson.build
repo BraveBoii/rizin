@@ -64,13 +64,14 @@ bin_xtr_plugins = [
 ]
 
 rz_bin_sources = [
+  'bfile.c',
   'bin.c',
   'bin_language.c',
+  'bobj.c',
   'dbginfo.c',
   'dwarf.c',
   'filter.c',
-  'bfile.c',
-  'bobj.c',
+  'golang.c',
   'relocs_patch.c',
   'p/bin_any.c',
   'p/bin_art.c',
@@ -204,7 +205,6 @@ rz_bin_sources = [
   'format/pe/pe.c',
   'format/pe/pe64.c',
   'format/pe/pemixed.c',
-  'format/pe/pe_misc.c',
   'format/pyc/marshal.c',
   'format/pyc/pyc.c',
   'format/pyc/pyc_magic.c',
@@ -244,6 +244,7 @@ rz_bin = library('rz_bin', rz_bin_sources,
   install_rpath: rpath_lib,
   link_args: library_linkflags,
   soversion: rizin_libversion,
+  version: rizin_version,
   name_suffix: lib_name_suffix,
   name_prefix: lib_name_prefix,
 )

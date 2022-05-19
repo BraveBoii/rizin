@@ -474,7 +474,7 @@ typedef struct rz_cons_context_t {
 	int cmd_depth;
 
 	// Used for per-task logging redirection
-	RLogCallback log_callback; // TODO: RzList of callbacks
+	RzLogCallback log_callback; // TODO: RzList of callbacks
 
 	char *lastOutput;
 	int lastLength;
@@ -500,7 +500,6 @@ typedef struct rz_cons_t {
 	int lines;
 	int rows;
 	int echo; // dump to stdout in realtime
-	int fps;
 	int columns;
 	int force_rows;
 	int force_columns;
@@ -904,7 +903,6 @@ RZ_API void rz_cons_newline(void);
 RZ_API void rz_cons_filter(void);
 RZ_API void rz_cons_flush(void);
 RZ_API void rz_cons_set_flush(bool flush);
-RZ_API void rz_cons_print_fps(int col);
 RZ_API void rz_cons_last(void);
 RZ_API int rz_cons_less_str(const char *str, const char *exitkeys);
 RZ_API void rz_cons_less(void);

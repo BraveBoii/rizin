@@ -102,24 +102,13 @@ RZ_API void rz_bin_xtrdata_free(void /*RzBinXtrData*/ *data_) {
 	free(data);
 }
 
-RZ_API RzList *rz_bin_raw_strings(RzBinFile *bf, int min) {
-	rz_return_val_if_fail(bf, NULL);
-	return rz_bin_file_get_strings(bf, min, 0, 2);
-}
-
-RZ_API RzList *rz_bin_dump_strings(RzBinFile *bf, int min, int raw) {
-	rz_return_val_if_fail(bf, NULL);
-	return rz_bin_file_get_strings(bf, min, 1, raw);
-}
-
-RZ_API void rz_bin_options_init(RzBinOptions *opt, int fd, ut64 baseaddr, ut64 loadaddr, bool patch_relocs, int rawstr) {
+RZ_API void rz_bin_options_init(RzBinOptions *opt, int fd, ut64 baseaddr, ut64 loadaddr, bool patch_relocs) {
 	memset(opt, 0, sizeof(*opt));
 	opt->obj_opts.baseaddr = baseaddr;
 	opt->obj_opts.loadaddr = loadaddr;
 	opt->obj_opts.patch_relocs = patch_relocs;
 	opt->obj_opts.elf_load_sections = true;
 	opt->fd = fd;
-	opt->rawstr = rawstr;
 }
 
 RZ_API void rz_bin_arch_options_init(RzBinArchOptions *opt, const char *arch, int bits) {
@@ -246,7 +235,7 @@ RZ_API RzBinFile *rz_bin_open(RzBin *bin, const char *file, RzBinOptions *opt) {
 		opt->fd = iob->fd_open(iob->io, file, RZ_PERM_R, 0644);
 	}
 	if (opt->fd < 0) {
-		eprintf("Couldn't open bin for file '%s'\n", file);
+		RZ_LOG_ERROR("Couldn't open bin for file '%s'\n", file);
 		return NULL;
 	}
 	opt->sz = 0;
@@ -264,7 +253,7 @@ RZ_API RzBinFile *rz_bin_reload(RzBin *bin, RzBinFile *bf, ut64 baseaddr) {
 	bool elf_checks_segments = bf->o ? bf->o->opts.elf_checks_segments : false;
 
 	RzBinOptions opt;
-	rz_bin_options_init(&opt, bf->fd, baseaddr, bf->loadaddr, patch_relocs, bin->rawstr);
+	rz_bin_options_init(&opt, bf->fd, baseaddr, bf->loadaddr, patch_relocs);
 	opt.obj_opts.elf_load_sections = elf_load_sections;
 	opt.obj_opts.elf_checks_sections = elf_checks_sections;
 	opt.obj_opts.elf_checks_segments = elf_checks_segments;
@@ -282,7 +271,6 @@ RZ_API RzBinFile *rz_bin_open_buf(RzBin *bin, RzBuffer *buf, RzBinOptions *opt) 
 	RzListIter *it;
 	RzBinXtrPlugin *xtr;
 
-	bin->rawstr = opt->rawstr;
 	bin->file = opt->filename;
 	if (opt->obj_opts.loadaddr == UT64_MAX) {
 		opt->obj_opts.loadaddr = 0;
@@ -295,7 +283,7 @@ RZ_API RzBinFile *rz_bin_open_buf(RzBin *bin, RzBuffer *buf, RzBinOptions *opt) 
 		// <xtr_name>:<bin_type_name>
 		rz_list_foreach (bin->binxtrs, it, xtr) {
 			if (!xtr->check_buffer) {
-				eprintf("Missing check_buffer callback for '%s'\n", xtr->name);
+				RZ_LOG_ERROR("Missing check_buffer callback for '%s'\n", xtr->name);
 				continue;
 			}
 			if (xtr->check_buffer(buf)) {
@@ -303,7 +291,7 @@ RZ_API RzBinFile *rz_bin_open_buf(RzBin *bin, RzBuffer *buf, RzBinOptions *opt) 
 					xtr->extract_from_bytes || xtr->extractall_from_bytes) {
 					bf = rz_bin_file_xtr_load_buffer(bin, xtr,
 						bin->file, buf, &opt->obj_opts,
-						opt->xtr_idx, opt->fd, bin->rawstr);
+						opt->xtr_idx, opt->fd);
 				}
 			}
 		}
@@ -311,7 +299,7 @@ RZ_API RzBinFile *rz_bin_open_buf(RzBin *bin, RzBuffer *buf, RzBinOptions *opt) 
 	if (!bf) {
 		// Uncomment for this speedup: 20s vs 22s
 		// RzBuffer *buf = rz_buf_new_slurp (bin->file);
-		bf = rz_bin_file_new_from_buffer(bin, bin->file, buf, bin->rawstr,
+		bf = rz_bin_file_new_from_buffer(bin, bin->file, buf,
 			&opt->obj_opts, opt->fd, opt->pluginname);
 		if (!bf) {
 			return NULL;
@@ -589,7 +577,7 @@ RZ_API bool rz_bin_list_plugin(RzBin *bin, const char *name, PJ *pj, int json) {
 		return true;
 	}
 
-	eprintf("Cannot find plugin %s\n", name);
+	RZ_LOG_ERROR("Cannot find plugin %s\n", name);
 	return false;
 }
 
@@ -611,25 +599,17 @@ RZ_API void rz_bin_set_baddr(RzBin *bin, ut64 baddr) {
 	rz_return_if_fail(bin);
 	RzBinFile *bf = rz_bin_cur(bin);
 	RzBinObject *o = rz_bin_cur_object(bin);
-	if (o) {
-		if (!o->plugin || !o->plugin->baddr) {
-			return;
-		}
-		ut64 file_baddr = o->plugin->baddr(bf);
-		if (baddr == UT64_MAX) {
-			o->opts.baseaddr = file_baddr;
-			o->baddr_shift = 0; // o->baddr; // - file_baddr;
-		} else {
-			if (file_baddr != UT64_MAX) {
-				o->opts.baseaddr = baddr;
-				o->baddr_shift = baddr - file_baddr;
-			}
-		}
-	} else {
-		eprintf("Warning: This should be an assert probably.\n");
+	if (!o || !o->plugin || !o->plugin->baddr) {
+		return;
 	}
-	// XXX - update all the infos?
-	// maybe in RzBinFile.rebase() ?
+	ut64 file_baddr = o->plugin->baddr(bf);
+	if (baddr == UT64_MAX) {
+		o->opts.baseaddr = file_baddr;
+		o->baddr_shift = 0; // o->baddr; // - file_baddr;
+	} else if (file_baddr != UT64_MAX) {
+		o->opts.baseaddr = baddr;
+		o->baddr_shift = baddr - file_baddr;
+	}
 }
 
 // XXX: those accessors are redundant
@@ -669,6 +649,14 @@ RZ_API RzList *rz_bin_get_sections(RzBin *bin) {
 	return o ? (RzList *)rz_bin_object_get_sections_all(o) : NULL;
 }
 
+/**
+ * \brief Find the binary section at offset \p off.
+ *
+ * \param o Reference to the \p RzBinObject instance
+ * \param off Address to search
+ * \param va When 0 the offset \p off is considered a physical address, otherwise a virtual address
+ * \return Pointer to a \p RzBinSection containing the address
+ */
 RZ_API RzBinSection *rz_bin_get_section_at(RzBinObject *o, ut64 off, int va) {
 	RzBinSection *section;
 	RzListIter *iter;
@@ -687,6 +675,65 @@ RZ_API RzBinSection *rz_bin_get_section_at(RzBinObject *o, ut64 off, int va) {
 		}
 	}
 	return NULL;
+}
+
+/**
+ * \brief Find the last binary map at offset \p off .
+ *
+ * This function returns the last binary map that contains offset \p off,
+ * because it assumes that maps are sorted by priority, thus the last one will
+ * be the most important one.
+ *
+ * \param o Reference to the \p RzBinObject instance
+ * \param off Address to search
+ * \param va When false the offset \p off is considered a physical address, otherwise a virtual address
+ * \return Pointer to a \p RzBinMap containing the address
+ */
+RZ_API RzBinMap *rz_bin_object_get_map_at(RzBinObject *o, ut64 off, bool va) {
+	rz_return_val_if_fail(o, NULL);
+
+	RzBinMap *map;
+	RzListIter *iter;
+	ut64 from, to;
+
+	rz_list_foreach_prev(o->maps, iter, map) {
+		from = va ? rz_bin_object_addr_with_base(o, map->vaddr) : map->paddr;
+		to = from + (va ? map->vsize : map->psize);
+		if (off >= from && off < to) {
+			return map;
+		}
+	}
+	return NULL;
+}
+
+/**
+ * \brief Find all binary maps at offset \p off .
+ *
+ * \param o Reference to the \p RzBinObject instance
+ * \param off Address to search
+ * \param va When false the offset \p off is considered a physical address, otherwise a virtual address
+ * \return Vector of \p RzBinMap pointers
+ */
+RZ_API RZ_OWN RzPVector *rz_bin_object_get_maps_at(RzBinObject *o, ut64 off, bool va) {
+	rz_return_val_if_fail(o, NULL);
+
+	RzBinMap *map;
+	RzListIter *iter;
+	ut64 from, to;
+
+	RzPVector *res = rz_pvector_new(NULL);
+	if (!res) {
+		return NULL;
+	}
+
+	rz_list_foreach (o->maps, iter, map) {
+		from = va ? rz_bin_object_addr_with_base(o, map->vaddr) : map->paddr;
+		to = from + (va ? map->vsize : map->psize);
+		if (off >= from && off < to) {
+			rz_pvector_push(res, map);
+		}
+	}
+	return res;
 }
 
 RZ_API RzList *rz_bin_reset_strings(RzBin *bin) {
@@ -912,73 +959,6 @@ RZ_API RzBuffer *rz_bin_create(RzBin *bin, const char *p,
 	codelen = RZ_MAX(codelen, 0);
 	datalen = RZ_MAX(datalen, 0);
 	return plugin->create(bin, code, codelen, data, datalen, opt);
-}
-
-RZ_API RzBuffer *rz_bin_package(RzBin *bin, const char *type, const char *file, RzList *files) {
-	if (!strcmp(type, "zip")) {
-		// XXX: implement me
-		rz_warn_if_reached();
-	} else if (!strcmp(type, "fat")) {
-		// XXX: this should be implemented in the fat plugin, not here
-		// XXX should pick the callback from the plugin list
-		const char *f;
-		RzListIter *iter;
-		ut32 num;
-		ut8 *num8 = (ut8 *)&num;
-		RzBuffer *buf = rz_buf_new_file(file, O_RDWR | O_CREAT, 0644);
-		if (!buf) {
-			eprintf("Cannot open file %s - Permission Denied.\n", file);
-			return NULL;
-		}
-		rz_buf_write_at(buf, 0, (const ut8 *)"\xca\xfe\xba\xbe", 4);
-		int count = rz_list_length(files);
-
-		num = rz_read_be32(&count);
-		ut64 from = 0x1000;
-		rz_buf_write_at(buf, 4, num8, 4);
-		int off = 12;
-		int item = 0;
-		rz_list_foreach (files, iter, f) {
-			size_t f_len = 0;
-			ut8 *f_buf = (ut8 *)rz_file_slurp(f, &f_len);
-			if (f_buf) {
-				eprintf("ADD %s %" PFMT64u "\n", f, (ut64)f_len);
-			} else {
-				eprintf("Cannot open %s\n", f);
-				free(f_buf);
-				continue;
-			}
-			item++;
-			/* CPU */
-			num8[0] = f_buf[7];
-			num8[1] = f_buf[6];
-			num8[2] = f_buf[5];
-			num8[3] = f_buf[4];
-			rz_buf_write_at(buf, off - 4, num8, 4);
-			/* SUBTYPE */
-			num8[0] = f_buf[11];
-			num8[1] = f_buf[10];
-			num8[2] = f_buf[9];
-			num8[3] = f_buf[8];
-			rz_buf_write_at(buf, off, num8, 4);
-			ut32 from32 = from;
-			/* FROM */
-			num = rz_read_be32(&from32);
-			rz_buf_write_at(buf, off + 4, num8, 4);
-			rz_buf_write_at(buf, from, f_buf, f_len);
-			/* SIZE */
-			num = rz_read_be32(&f_len);
-			rz_buf_write_at(buf, off + 8, num8, 4);
-			off += 20;
-			from += f_len + (f_len % 0x1000);
-			free(f_buf);
-		}
-		rz_buf_free(buf);
-		return NULL;
-	} else {
-		eprintf("Usage: rz-bin -X [fat|zip] [filename] [files ...]\n");
-	}
-	return NULL;
 }
 
 RZ_API RzList * /*<RzBinClass>*/ rz_bin_get_classes(RzBin *bin) {
@@ -1259,16 +1239,15 @@ RZ_API RZ_OWN RzList *rz_bin_section_flag_to_list(RzBin *bin, ut64 flag) {
 }
 
 RZ_API RzBinFile *rz_bin_file_at(RzBin *bin, ut64 at) {
-	RzListIter *it, *it2;
+	RzListIter *it;
 	RzBinFile *bf;
-	RzBinSection *s;
 	rz_list_foreach (bin->binfiles, it, bf) {
-		// chk for baddr + size of no section is covering anything
-		// we should honor maps not sections imho
-		rz_list_foreach (bf->o->sections, it2, s) {
-			if (at >= s->vaddr && at < (s->vaddr + s->vsize)) {
-				return bf;
-			}
+		if (!bf->o) {
+			continue;
+		}
+		RzBinMap *map = rz_bin_object_get_map_at(bf->o, at, true);
+		if (map) {
+			return bf;
 		}
 		if (at >= bf->o->opts.baseaddr && at < (bf->o->opts.baseaddr + bf->size)) {
 			return bf;

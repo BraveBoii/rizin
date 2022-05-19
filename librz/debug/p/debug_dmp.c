@@ -73,7 +73,7 @@ static bool rz_debug_dmp_init(RzDebug *dbg, void **user) {
 		rz_io_map_del(core->io, map->id);
 	}
 	if (ctx->type == DMP_DUMPTYPE_TRIAGE) {
-		dbg->corebind.cmd(dbg->corebind.core, "e io.va=1");
+		dbg->corebind.cfgSetI(dbg->corebind.core, "io.va", 1);
 		ctx->target = TARGET_BACKEND;
 		ctx->kernelDirectoryTable = TARGET_BACKEND;
 	} else {
@@ -129,15 +129,17 @@ static bool rz_debug_dmp_init(RzDebug *dbg, void **user) {
 		}
 		ctx->windctx.target.uniqueid = 0;
 	}
-
+	char *kernel_pdb = NULL;
 	if (mod.name) {
 		core->bin->cur->o->opts.baseaddr = mod.addr;
 		const char *server = dbg->corebind.cfgGet(dbg->corebind.core, "pdb.server");
 		const char *symstore = dbg->corebind.cfgGet(dbg->corebind.core, "pdb.symstore");
 		char *pdbpath, *exepath;
 		if (winkd_download_module_and_pdb(&mod, server, symstore, &exepath, &pdbpath)) {
-			dbg->corebind.cmdf(dbg->corebind.core, "idp %s", pdbpath);
+			// TODO: Convert to API call
+			dbg->corebind.cmdf(dbg->corebind.core, "idp \"%s\"", pdbpath);
 			free(exepath);
+			kernel_pdb = strdup(rz_file_basename(pdbpath));
 			free(pdbpath);
 			if (!ctx->windctx.profile) {
 				winkd_build_profile(&ctx->windctx, dbg->analysis->typedb);
@@ -163,8 +165,16 @@ static bool rz_debug_dmp_init(RzDebug *dbg, void **user) {
 		const ut64 switch_frame_offset = rz_type_db_struct_member_offset(dbg->analysis->typedb, "_KTHREAD", "SwitchFrame");
 		ctx->kthread_switch_frame_offset = switch_frame_offset + rz_type_db_struct_member_offset(dbg->analysis->typedb, "_KSWITCH_FRAME", "Fp");
 	}
-
-	const ut64 KiProcessorBlock = dbg->corebind.numGet(dbg->corebind.core, "pdb.KiProcessorBlock");
+	char *kpb_flag_name;
+	if (kernel_pdb) {
+		rz_str_replace(kernel_pdb, ".pdb", "", 0);
+		kpb_flag_name = rz_str_newf("pdb.%s.KiProcessorBlock", kernel_pdb);
+		free(kernel_pdb);
+	} else {
+		kpb_flag_name = strdup("0");
+	}
+	const ut64 KiProcessorBlock = dbg->corebind.numGet(dbg->corebind.core, kpb_flag_name);
+	free(kpb_flag_name);
 	ut64 i;
 	for (i = 0; i < NumberProcessors; i++) {
 		ut64 address = KiProcessorBlock + i * (ctx->windctx.is_64bit ? 8 : 4);
@@ -449,7 +459,7 @@ static RzList *rz_debug_dmp_modules(RzDebug *dbg) {
 			return NULL;
 		}
 		mod->file = strdup(m->name);
-		mod->name = strdup(rz_file_basename(m->name));
+		mod->name = strdup(rz_file_dos_basename(m->name));
 		mod->size = m->size;
 		mod->addr = m->addr;
 		mod->addr_end = m->addr + m->size;

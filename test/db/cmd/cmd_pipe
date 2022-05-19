@@ -24,7 +24,7 @@ Disassembly of entry0:
             ;-- .text:
             ;-- _start():
 / entry0 ();
-|           0x08049020      push  ebp                                  ; [10] -r-x section size 16 named .text
+|           0x08049020      push  ebp                                  ; [09] -r-x section size 16 named .text
 |           0x08049021      mov   ebp, esp
 |           0x08049023      sub   esp, 8
 |           0x08049026      sub   esp, 0xc
@@ -39,7 +39,7 @@ FILE=--
 CMDS=<<EOF
 ?q `env~?^ASAN_LD_PRELOAD=`
 ?+ env LD_PRELOAD=`env ASAN_LD_PRELOAD`
-!python3 -c 'import rzpipe;rz=rzpipe.open("--");rz.cmd("Po bins/other/ls.rzdb");print(rz.cmd("?v custom_main").replace("\r\n","\n"))'
+!python3 -c 'import rzpipe;rz=rzpipe.open("--");rz.cmd("Po bins/other/ls.rzdb");print(rz.cmd("?v custom_main"))'
 EOF
 EXPECT=<<EOF
 0x4070
@@ -71,7 +71,7 @@ Shared buffer size 0x360c
             ;-- .text:
             ;-- _start():
 / entry0 ();
-|           0x08049020      push  ebp                                  ; [10] -r-x section size 16 named .text
+|           0x08049020      push  ebp                                  ; [09] -r-x section size 16 named .text
 |           0x08049021      mov   ebp, esp
 |           0x08049023      sub   esp, 8
 |           0x08049026      sub   esp, 0xc
@@ -97,7 +97,7 @@ Shared buffer size 0x400
 |           0x00401011      push  dword [0x40108c]
 |           0x00401017      push  dword [0x401088]
 |           0x0040101d      push  dword [0x401084]
-|           0x00401023      push  0x40103c                             ; " * a PE overriding OS values: OS Ver %i.%i.%i PlatformID %i\n\n" ; const char *format
+|           0x00401023      push  str.a_PE_overriding_OS_values:_OS_Ver__i._i._i_PlatformID__i ; 0x40103c ; " * a PE overriding OS values: OS Ver %i.%i.%i PlatformID %i\n\n" ; const char *format
 |           0x00401028      call  dword [sym.imp.msvcrt.dll_printf]    ; 0x4011bc ; int printf(const char *format)
 |           0x0040102e      add   esp, 0x10
 |           0x00401031      nop
@@ -109,7 +109,7 @@ Copied bins/mach0/mach0_2-x86_64 succesfully
 -------------
 Shared buffer size 0x10e8
 -------------
-{'arch': 'x86', 'baddr': 4294967296, 'binsz': 4328, 'bintype': 'mach0', 'bits': 64, 'class': 'MACH064', 'compiler': '', 'endian': 'LE', 'intrp': '/usr/lib/dyld', 'laddr': 0, 'lang': 'c', 'machine': 'x86 64 all', 'maxopsz': 16, 'minopsz': 1, 'os': 'macos', 'pcalign': 0, 'subsys': 'darwin', 'stripped': False, 'crypto': False, 'havecode': True, 'va': True, 'sanitiz': False, 'static': False, 'linenum': False, 'lsyms': False, 'canary': False, 'PIE': True, 'RELROCS': False, 'NX': False}
+{'arch': 'x86', 'baddr': 4294967296, 'binsz': 4328, 'bintype': 'mach0', 'bits': 64, 'class': 'MACH064', 'endian': 'LE', 'intrp': '/usr/lib/dyld', 'laddr': 0, 'lang': 'c', 'machine': 'x86 64 all', 'maxopsz': 16, 'minopsz': 1, 'os': 'macos', 'pcalign': 0, 'subsys': 'darwin', 'stripped': False, 'crypto': False, 'havecode': True, 'va': True, 'sanitiz': False, 'static': False, 'linenum': False, 'lsyms': False, 'canary': False, 'PIE': True, 'RELROCS': False, 'NX': False}
 - offset -    0 1  2 3  4 5  6 7  8 9  A B  C D  E F  0123456789ABCDEF
 0x100000f70  5548 89e5 4883 ec10 c745 fc00 0000 0089  UH..H....E......
 

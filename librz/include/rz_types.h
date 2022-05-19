@@ -18,6 +18,7 @@
 #undef __UNIX__
 #undef __WINDOWS__
 
+// TODO: these modes should be dropped when oldshell is removed in favour of RzOutputMode.
 #define RZ_MODE_PRINT     0x000
 #define RZ_MODE_RIZINCMD  0x001
 #define RZ_MODE_SET       0x002
@@ -291,6 +292,7 @@ static inline void *rz_new_copy(int size, void *data) {
 #define RZ_PTR_ALIGN_NEXT(v, t) \
 	((char *)(((size_t)(v) + (t - 1)) & ~(t - 1)))
 
+#define RZ_BIT_MASK32(x, y) ((1UL << (x)) - (1UL << (y)))
 #define RZ_BIT_SET(x, y)    (((ut8 *)x)[y >> 4] |= (1 << (y & 0xf)))
 #define RZ_BIT_UNSET(x, y)  (((ut8 *)x)[y >> 4] &= ~(1 << (y & 0xf)))
 #define RZ_BIT_TOGGLE(x, y) (RZ_BIT_CHK(x, y) ? RZ_BIT_UNSET(x, y) : RZ_BIT_SET(x, y))
@@ -352,6 +354,12 @@ static inline void *rz_new_copy(int size, void *data) {
 #define RZ_FREE(x) \
 	{ \
 		free((void *)x); \
+		x = NULL; \
+	}
+
+#define RZ_FREE_CUSTOM(x, y) \
+	{ \
+		y(x); \
 		x = NULL; \
 	}
 

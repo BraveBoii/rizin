@@ -5,6 +5,7 @@
 #include <rz_util.h>
 #include <rz_type.h>
 
+#include "test_config.h"
 #include "minunit.h"
 #include "test_sdb.h"
 
@@ -379,9 +380,8 @@ static bool test_enum_types(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	RzType *ttype = rz_type_parse_string_single(typedb->parser, test_enum, &error_msg);
@@ -418,9 +418,8 @@ static bool test_const_types(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	// Const identifier but not pointer
@@ -471,9 +470,8 @@ static bool test_type_as_string(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	RzType *ttype = rz_type_parse_string_single(typedb->parser, array, &error_msg);
@@ -591,9 +589,8 @@ static bool test_type_as_pretty_string(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	RzType *ttype = rz_type_parse_string_single(typedb->parser, pretty_complex_const_pointer, &error_msg);
@@ -696,9 +693,8 @@ static bool test_array_types(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	// Zero-sized array
@@ -750,9 +746,8 @@ static bool test_struct_func_types(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	// Sturcture type with a function pointer
@@ -841,9 +836,8 @@ static bool test_struct_array_types(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	// Structure type with a pointer to a function pointer and array
@@ -890,9 +884,8 @@ static bool test_struct_identifier_without_specifier(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	int r = rz_type_parse_string(typedb, "struct bla { int a; };", &error_msg);
@@ -919,9 +912,8 @@ static bool test_union_identifier_without_specifier(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	int r = rz_type_parse_string(typedb, "union bla { int a; };", &error_msg);
@@ -952,9 +944,8 @@ static bool test_edit_types(void) {
 	RzTypeDB *typedb = rz_type_db_new();
 	mu_assert_notnull(typedb, "Couldn't create new RzTypeDB");
 	mu_assert_notnull(typedb->types, "Couldn't create new types hashtable");
-	char *types_dir = rz_path_system(RZ_SDB_TYPES);
+	const char *types_dir = TEST_BUILD_TYPES_DIR;
 	rz_type_db_init(typedb, types_dir, "x86", 64, "linux");
-	free(types_dir);
 
 	char *error_msg = NULL;
 	RzType *ttype = rz_type_parse_string_single(typedb->parser, edit_array_old, &error_msg);
@@ -1013,6 +1004,19 @@ bool test_references(void) {
 	mu_end;
 }
 
+bool test_addr_bits(void) {
+	RzTypeDB *typedb = rz_type_db_new();
+	rz_type_db_set_bits(typedb, 32);
+	mu_assert_eq(rz_type_db_pointer_size(typedb), 32, "ptr size");
+	rz_type_db_set_bits(typedb, 64);
+	mu_assert_eq(rz_type_db_pointer_size(typedb), 64, "ptr size");
+	rz_type_db_set_address_bits(typedb, 32); // overrided bits
+	mu_assert_eq(rz_type_db_pointer_size(typedb), 32, "ptr size");
+	rz_type_db_set_bits(typedb, 16);
+	mu_assert_eq(rz_type_db_pointer_size(typedb), 32, "ptr size");
+	mu_end;
+}
+
 int all_tests() {
 	mu_run_test(test_types_get_base_type_struct);
 	mu_run_test(test_types_get_base_type_union);
@@ -1033,6 +1037,7 @@ int all_tests() {
 	mu_run_test(test_union_identifier_without_specifier);
 	mu_run_test(test_edit_types);
 	mu_run_test(test_references);
+	mu_run_test(test_addr_bits);
 	return tests_passed != tests_run;
 }
 

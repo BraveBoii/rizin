@@ -108,7 +108,7 @@ static RzBuffer *create(RzBin *bin, const ut8 *code, int codelen, const ut8 *dat
 
 	if (data && datalen > 0) {
 		// ut32 data_section = buf->length;
-		eprintf("Warning: DATA section not support for PE yet\n");
+		RZ_LOG_WARN("DATA section not support for PE yet\n");
 		B(data, datalen);
 	}
 	return buf;
@@ -472,6 +472,7 @@ RzBinPlugin rz_bin_plugin_pe = {
 	.signature = &signature,
 	.symbols = &symbols,
 	.imports = &imports,
+	.strings = &strings,
 	.info = &info,
 	.header = &header,
 	.fields = &fields,

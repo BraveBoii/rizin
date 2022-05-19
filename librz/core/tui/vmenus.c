@@ -194,7 +194,7 @@ RZ_API bool rz_core_visual_esil(RzCore *core) {
 			free(r);
 		}
 		rz_cons_printf("esil stack:\n");
-		rz_analysis_esil_dumpstack(esil);
+		rz_core_esil_dumpstack(esil);
 		rz_analysis_op_fini(&analop);
 		rz_cons_newline();
 		rz_cons_visual_flush();
@@ -1674,9 +1674,8 @@ RZ_API int rz_core_visual_trackflags(RzCore *core) {
 			case 0: // new flag space
 				rz_cons_show_cursor(true);
 				rz_line_set_prompt("add flagspace: ");
-				strcpy(cmd, "fs ");
-				if (rz_cons_fgets(cmd + 3, sizeof(cmd) - 3, 0, NULL) > 0) {
-					rz_core_cmd(core, cmd, 0);
+				if (rz_cons_fgets(cmd, sizeof(cmd), 0, NULL) > 0) {
+					rz_flag_space_set(core->flags, cmd);
 					rz_cons_set_raw(1);
 					rz_cons_show_cursor(false);
 				}
@@ -3188,7 +3187,6 @@ onemoretime:
 	} break;
 	case 'n': {
 		RzAnalysisOp op;
-		char *q = NULL;
 		ut64 tgt_addr = UT64_MAX;
 		if (!isDisasmPrint(core->printidx)) {
 			break;
@@ -3200,7 +3198,6 @@ onemoretime:
 		tgt_addr = op.jump != UT64_MAX ? op.jump : op.ptr;
 		RzAnalysisVar *var = rz_analysis_get_used_function_var(core->analysis, op.addr);
 		if (var) {
-			//			q = rz_str_newf ("?i Rename variable %s to;afvn %s `yp`", op.var->name, op.var->name);
 			char *newname = rz_cons_input(sdb_fmt("New variable name for '%s': ", var->name));
 			if (newname && *newname) {
 				rz_analysis_var_rename(var, newname, true);
@@ -3210,21 +3207,26 @@ onemoretime:
 			RzAnalysisFunction *fcn = rz_analysis_get_function_at(core->analysis, tgt_addr);
 			RzFlagItem *f = rz_flag_get_i(core->flags, tgt_addr);
 			if (fcn) {
-				q = rz_str_newf("?i Rename function %s to;afn `yp` 0x%" PFMT64x,
-					fcn->name, tgt_addr);
+				char *msg = rz_str_newf("Rename function %s to: ", fcn->name);
+				char *newname = rz_cons_input(msg);
+				free(msg);
+				rz_core_analysis_function_rename(core, tgt_addr, newname);
+				free(newname);
 			} else if (f) {
-				q = rz_str_newf("?i Rename flag %s to;fr %s `yp`",
-					f->name, f->name);
+				char *msg = rz_str_newf("Rename flag %s to: ", f->name);
+				char *newname = rz_cons_input(msg);
+				free(msg);
+				rz_flag_rename(core->flags, f, newname);
+				free(newname);
 			} else {
-				q = rz_str_newf("?i Create flag at 0x%" PFMT64x " named;f `yp` @ 0x%" PFMT64x,
-					tgt_addr, tgt_addr);
+				char *msg = rz_str_newf("Create flag at 0x%" PFMT64x " named: ", tgt_addr);
+				char *newname = rz_cons_input(msg);
+				free(msg);
+				rz_flag_set(core->flags, newname, tgt_addr, 1);
+				free(newname);
 			}
 		}
 
-		if (q) {
-			rz_core_cmd0(core, q);
-			free(q);
-		}
 		rz_analysis_op_fini(&op);
 		break;
 	}
@@ -3281,9 +3283,10 @@ onemoretime:
 			}
 		}
 		break;
-	case 'j':
-		rz_core_cmdf(core, "afm $$+$F @0x%08" PFMT64x, off);
-		break;
+	case 'j': {
+		ut64 addr = rz_num_math(core->num, "$$+$F");
+		rz_core_analysis_fcn_merge(core, off, addr);
+	} break;
 	case 'k':
 		eprintf("TODO: merge up\n");
 		rz_cons_any_key(NULL);

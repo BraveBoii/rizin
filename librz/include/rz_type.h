@@ -20,6 +20,7 @@ RZ_LIB_VERSION_HEADER(rz_type);
 typedef struct rz_type_target_t {
 	char *cpu;
 	int bits;
+	int addr_bits; ///< size of a pointer if > 0, otherwise bits is used.
 	char *os;
 	bool big_endian;
 	const char *default_type;
@@ -199,6 +200,7 @@ typedef enum {
 	RZ_TYPE_COND_HEX_SCL_FALSE, // Hexagon only: Scalar instruction if(!Pu)
 	RZ_TYPE_COND_HEX_VEC_TRUE, // Hexagon only: Vector instruction if(Pu)
 	RZ_TYPE_COND_HEX_VEC_FALSE, // Hexagon only: Vector instruction if(!Pu)
+	RZ_TYPE_COND_EXCEPTION, // when the jump is taken only during an exception
 } RzTypeCond;
 
 /**
@@ -230,6 +232,7 @@ RZ_API bool rz_type_db_load_sdb_str(RzTypeDB *typedb, RZ_NONNULL const char *str
 RZ_API bool rz_type_db_load_callables_sdb(RzTypeDB *typedb, RZ_NONNULL const char *path);
 RZ_API bool rz_type_db_load_callables_sdb_str(RzTypeDB *typedb, RZ_NONNULL const char *str);
 RZ_API void rz_type_db_set_bits(RzTypeDB *typedb, int bits);
+RZ_API void rz_type_db_set_address_bits(RzTypeDB *typedb, int addr_bits);
 RZ_API void rz_type_db_set_os(RzTypeDB *typedb, const char *os);
 RZ_API void rz_type_db_set_cpu(RzTypeDB *typedb, const char *cpu);
 RZ_API void rz_type_db_set_endian(RzTypeDB *typedb, bool big_endian);

@@ -128,10 +128,13 @@ RZ_API ut64 rz_buf_size(RZ_NONNULL RzBuffer *b);
 RZ_API ut64 rz_buf_tell(RZ_NONNULL RzBuffer *b);
 RZ_API void rz_buf_free(RzBuffer *b);
 RZ_API void rz_buf_set_overflow_byte(RZ_NONNULL RzBuffer *b, ut8 Oxff);
-RZ_DEPRECATE RZ_API RZ_BORROW const ut8 *rz_buf_data(RZ_NONNULL RzBuffer *b, ut64 *size);
+RZ_DEPRECATE RZ_API RZ_BORROW ut8 *rz_buf_data(RZ_NONNULL RzBuffer *b, RZ_NONNULL RZ_OUT ut64 *size);
 
-RZ_API st64 rz_buf_uleb128(RzBuffer *b, ut64 *v);
-RZ_API st64 rz_buf_sleb128(RzBuffer *b, st64 *v);
+typedef ut64 (*RzBufferFwdScan)(RZ_BORROW RZ_NONNULL const ut8 *buf, ut64 len, RZ_NULLABLE void *user);
+RZ_API ut64 rz_buf_fwd_scan(RZ_NONNULL RzBuffer *b, ut64 start, ut64 amount, RZ_NONNULL RzBufferFwdScan fwd_scan, RZ_NULLABLE void *user);
+
+RZ_API st64 rz_buf_uleb128(RZ_NONNULL RzBuffer *buffer, RZ_NONNULL ut64 *value);
+RZ_API st64 rz_buf_sleb128(RZ_NONNULL RzBuffer *buffer, RZ_NONNULL st64 *value);
 
 static inline st64 rz_buf_uleb128_at(RzBuffer *b, ut64 addr, ut64 *v) {
 	rz_buf_seek(b, addr, RZ_BUF_SET);
@@ -197,7 +200,7 @@ DEFINE_RZ_BUF_READ_BLE(32)
 DEFINE_RZ_BUF_READ_BLE(64)
 
 /**
- * \brief Read a big endian or little endian ut16 at the specified address or cursor in the buffer.
+ * \brief Write a big endian or little endian ut16 at the specified address or cursor in the buffer.
  * \param b ...
  * \param addr (optional)
  * \param result ...
@@ -208,6 +211,55 @@ DEFINE_RZ_BUF_WRITE_BLE(16)
 DEFINE_RZ_BUF_WRITE_BLE(32)
 DEFINE_RZ_BUF_WRITE_BLE(64)
 
+#define DEFINE_RZ_BUF_READ_OFFSET_BLE(size) \
+	static inline bool rz_buf_read_ble##size##_offset(RZ_NONNULL RzBuffer *b, RZ_NONNULL RZ_INOUT ut64 *offset, RZ_NONNULL RZ_OUT ut##size *result, bool big_endian) { \
+		rz_return_val_if_fail(b &&offset &&result, false); \
+		if (!rz_buf_read_ble##size##_at(b, *offset, result, big_endian)) { \
+			return false; \
+		} \
+		*offset += sizeof(*result); \
+		return true; \
+	}
+
+#define DEFINE_RZ_BUF_WRITE_OFFSET_BLE(size) \
+	static inline bool rz_buf_write_ble##size##_offset(RZ_NONNULL RzBuffer *b, RZ_NONNULL RZ_INOUT ut64 *offset, ut##size value, bool big_endian) { \
+		rz_return_val_if_fail(b &&offset, false); \
+		if (!rz_buf_write_ble##size##_at(b, *offset, value, big_endian)) { \
+			return false; \
+		} \
+		*offset += sizeof(value); \
+		return true; \
+	}
+
+#define rz_buf_read_ble8_at(b, addr, result, endian) rz_buf_read8_at(b, addr, result)
+#define rz_buf_write_ble8_at(b, addr, value, endian) rz_buf_write8_at(b, addr, value)
+
+/**
+ * \brief Read a big endian or little endian (ut16, ut32, ut64) at the specified offset in the buffer and shifts the offset.
+ * \param b ...
+ * \param offset ...
+ * \param result ...
+ * \param big_endian ...
+ * \return Return the status of the operation.
+ */
+DEFINE_RZ_BUF_READ_OFFSET_BLE(8)
+DEFINE_RZ_BUF_READ_OFFSET_BLE(16)
+DEFINE_RZ_BUF_READ_OFFSET_BLE(32)
+DEFINE_RZ_BUF_READ_OFFSET_BLE(64)
+
+/**
+ * \brief Write a big endian or little endian ut16 at the specified address or cursor in the buffer and shifts the offset.
+ * \param b ...
+ * \param addr (optional)
+ * \param result ...
+ * \param big_endian ...
+ * \return Return the status of the operation.
+ */
+DEFINE_RZ_BUF_WRITE_OFFSET_BLE(8)
+DEFINE_RZ_BUF_WRITE_OFFSET_BLE(16)
+DEFINE_RZ_BUF_WRITE_OFFSET_BLE(32)
+DEFINE_RZ_BUF_WRITE_OFFSET_BLE(64)
+
 #define rz_buf_read_le16(b, result) rz_buf_read_ble16(b, result, false)
 #define rz_buf_read_le32(b, result) rz_buf_read_ble32(b, result, false)
 #define rz_buf_read_le64(b, result) rz_buf_read_ble64(b, result, false)
@@ -215,6 +267,12 @@ DEFINE_RZ_BUF_WRITE_BLE(64)
 #define rz_buf_read_le16_at(b, addr, result) rz_buf_read_ble16_at(b, addr, result, false)
 #define rz_buf_read_le32_at(b, addr, result) rz_buf_read_ble32_at(b, addr, result, false)
 #define rz_buf_read_le64_at(b, addr, result) rz_buf_read_ble64_at(b, addr, result, false)
+
+#define rz_buf_read8_offset(b, offset, result) rz_buf_read_ble8_offset(b, offset, result, false)
+
+#define rz_buf_read_le16_offset(b, offset, result) rz_buf_read_ble16_offset(b, offset, result, false)
+#define rz_buf_read_le32_offset(b, offset, result) rz_buf_read_ble32_offset(b, offset, result, false)
+#define rz_buf_read_le64_offset(b, offset, result) rz_buf_read_ble64_offset(b, offset, result, false)
 
 #define rz_buf_read_be16(b, result) rz_buf_read_ble16(b, result, true)
 #define rz_buf_read_be32(b, result) rz_buf_read_ble32(b, result, true)
@@ -224,6 +282,10 @@ DEFINE_RZ_BUF_WRITE_BLE(64)
 #define rz_buf_read_be32_at(b, addr, result) rz_buf_read_ble32_at(b, addr, result, true)
 #define rz_buf_read_be64_at(b, addr, result) rz_buf_read_ble64_at(b, addr, result, true)
 
+#define rz_buf_read_be16_offset(b, offset, result) rz_buf_read_ble16_offset(b, offset, result, true)
+#define rz_buf_read_be32_offset(b, offset, result) rz_buf_read_ble32_offset(b, offset, result, true)
+#define rz_buf_read_be64_offset(b, offset, result) rz_buf_read_ble64_offset(b, offset, result, true)
+
 #define rz_buf_write_le16(b, value) rz_buf_write_ble16(b, value, false)
 #define rz_buf_write_le32(b, value) rz_buf_write_ble32(b, value, false)
 #define rz_buf_write_le64(b, value) rz_buf_write_ble64(b, value, false)
@@ -231,6 +293,12 @@ DEFINE_RZ_BUF_WRITE_BLE(64)
 #define rz_buf_write_le16_at(b, addr, value) rz_buf_write_ble16_at(b, addr, value, false)
 #define rz_buf_write_le32_at(b, addr, value) rz_buf_write_ble32_at(b, addr, value, false)
 #define rz_buf_write_le64_at(b, addr, value) rz_buf_write_ble64_at(b, addr, value, false)
+
+#define rz_buf_write8_offset(b, offset, value) rz_buf_write_ble8_offset(b, offset, value, false)
+
+#define rz_buf_write_le16_offset(b, offset, value) rz_buf_write_ble16_offset(b, offset, value, false)
+#define rz_buf_write_le32_offset(b, offset, value) rz_buf_write_ble32_offset(b, offset, value, false)
+#define rz_buf_write_le64_offset(b, offset, value) rz_buf_write_ble64_offset(b, offset, value, false)
 
 #define rz_buf_write_be16(b, value) rz_buf_write_ble16(b, value, true)
 #define rz_buf_write_be32(b, value) rz_buf_write_ble32(b, value, true)
@@ -240,8 +308,14 @@ DEFINE_RZ_BUF_WRITE_BLE(64)
 #define rz_buf_write_be32_at(b, addr, value) rz_buf_write_ble32_at(b, addr, value, true)
 #define rz_buf_write_be64_at(b, addr, value) rz_buf_write_ble64_at(b, addr, value, true)
 
+#define rz_buf_write_be16_offset(b, offset, value) rz_buf_write_ble16_offset(b, offset, value, true)
+#define rz_buf_write_be32_offset(b, offset, value) rz_buf_write_ble32_offset(b, offset, value, true)
+#define rz_buf_write_be64_offset(b, offset, value) rz_buf_write_ble64_offset(b, offset, value, true)
+
 #undef DEFINE_RZ_BUF_READ_BLE
 #undef DEFINE_RZ_BUF_WRITE_BLE
+#undef DEFINE_RZ_BUF_READ_OFFSET_BLE
+#undef DEFINE_RZ_BUF_WRITE_OFFSET_BLE
 
 // sparse-specific
 

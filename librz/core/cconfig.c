@@ -6,19 +6,9 @@
 #include <rz_basefind.h>
 #include <rz_th.h>
 #include <rz_windows.h>
+#include <rz_config.h>
 
 #include "core_private.h"
-
-#define NODECB(w, x, y)    rz_config_set_cb(cfg, w, x, y)
-#define NODEICB(w, x, y)   rz_config_set_i_cb(cfg, w, x, y)
-#define SETDESC(x, y)      rz_config_node_desc(x, y)
-#define SETOPTIONS(x, ...) set_options(x, __VA_ARGS__)
-#define SETI(x, y, z)      SETDESC(rz_config_set_i(cfg, x, y), z)
-#define SETB(x, y, z)      SETDESC(rz_config_set_b(cfg, x, y), z)
-#define SETICB(w, x, y, z) SETDESC(NODEICB(w, x, y), z)
-#define SETPREF(x, y, z)   SETDESC(rz_config_set(cfg, x, y), z)
-#define SETCB(w, x, y, z)  SETDESC(NODECB(w, x, y), z)
-#define SETBPREF(x, y, z)  SETDESC(NODECB(x, y, boolify_var_cb), z)
 
 static bool boolify_var_cb(void *user, void *data) {
 	RzConfigNode *node = (RzConfigNode *)data;
@@ -186,13 +176,6 @@ static bool cb_analysis_delay(void *user, void *data) {
 	RzCore *core = (RzCore *)user;
 	RzConfigNode *node = (RzConfigNode *)data;
 	core->analysis->opt.delay = node->i_value;
-	return true;
-}
-
-static bool cb_analysis_endsize(void *user, void *data) {
-	RzCore *core = (RzCore *)user;
-	RzConfigNode *node = (RzConfigNode *)data;
-	core->analysis->opt.endsize = node->i_value;
 	return true;
 }
 
@@ -564,7 +547,6 @@ static bool cb_asmarch(void *user, void *data) {
 		rz_config_set_i(core->config, "asm.bits", bits);
 	}
 
-	// rz_debug_set_arch (core->dbg, rz_sys_arch_id (node->value), bits);
 	rz_debug_set_arch(core->dbg, node->value, bits);
 	if (!rz_config_set(core->config, "analysis.arch", node->value)) {
 		char *p, *s = strdup(node->value);
@@ -584,10 +566,7 @@ static bool cb_asmarch(void *user, void *data) {
 	if (core->analysis) {
 		const char *asmcpu = rz_config_get(core->config, "asm.cpu");
 		const char *platform = rz_config_get(core->config, "asm.platform");
-		if (!rz_syscall_setup(core->analysis->syscall, node->value, core->analysis->bits, asmcpu, asmos)) {
-			// eprintf ("asm.arch: Cannot setup syscall '%s/%s' from '%s'\n",
-			//	node->value, asmos, RZ_LIBDIR"/rizin/"RZ_VERSION"/syscall");
-		}
+		rz_syscall_setup(core->analysis->syscall, node->value, core->analysis->bits, asmcpu, asmos);
 		update_syscall_ns(core);
 		char *platforms_dir = rz_path_system(RZ_SDB_ARCH_PLATFORMS);
 		char *cpus_dir = rz_path_system(RZ_SDB_ARCH_CPUS);
@@ -596,8 +575,6 @@ static bool cb_asmarch(void *user, void *data) {
 		free(platforms_dir);
 		free(cpus_dir);
 	}
-	// if (!strcmp (node->value, "bf"))
-	//	rz_config_set (core->config, "dbg.backend", "bf");
 	__setsegoff(core->config, node->value, core->rasm->bits);
 
 	// set a default endianness
@@ -680,13 +657,6 @@ static bool cb_asmbits(void *user, void *data) {
 	if (!bits) {
 		return false;
 	}
-#if 0
-// TODO: pretty good optimization, but breaks many tests when arch is different i think
-	if (bits == core->rasm->bits && bits == core->analysis->bits && bits == core->dbg->bits) {
-		// early optimization
-		return true;
-	}
-#endif
 	if (bits > 0) {
 		ret = rz_asm_set_bits(core->rasm, bits);
 		if (!ret) {
@@ -849,13 +819,6 @@ static bool cb_asm_immhash(void *user, void *data) {
 	RzCore *core = (RzCore *)user;
 	RzConfigNode *node = (RzConfigNode *)data;
 	core->rasm->immdisp = node->i_value ? true : false;
-	return true;
-}
-
-static bool cb_asm_immsign(void *user, void *data) {
-	RzCore *core = (RzCore *)user;
-	RzConfigNode *node = (RzConfigNode *)data;
-	core->rasm->immsign = node->i_value;
 	return true;
 }
 
@@ -2113,12 +2076,6 @@ static bool cb_scr_gadgets(void *user, void *data) {
 	return true;
 }
 
-static bool cb_fps(void *user, void *data) {
-	RzConfigNode *node = (RzConfigNode *)data;
-	rz_cons_singleton()->fps = node->i_value;
-	return true;
-}
-
 static bool cb_scrbreakword(void *user, void *data) {
 	RzConfigNode *node = (RzConfigNode *)data;
 	if (*node->value) {
@@ -2467,13 +2424,6 @@ static bool cb_binverbose(void *user, void *data) {
 	return true;
 }
 
-static bool cb_rawstr(void *user, void *data) {
-	RzCore *core = (RzCore *)user;
-	RzConfigNode *node = (RzConfigNode *)data;
-	core->bin->rawstr = node->i_value;
-	return true;
-}
-
 static bool cb_debase64(void *user, void *data) {
 	RzCore *core = (RzCore *)user;
 	RzConfigNode *node = (RzConfigNode *)data;
@@ -2503,13 +2453,6 @@ static bool cb_bindbginfo(void *user, void *data) {
 	return true;
 }
 
-static bool cb_hexsdk(void *user, void *data) {
-	RzCore *core = (RzCore *)user;
-	RzConfigNode *node = (RzConfigNode *)data;
-	core->rasm->hex_sdk = (bool)node->i_value;
-	return true;
-}
-
 static bool cb_binprefix(void *user, void *data) {
 	RzCore *core = (RzCore *)user;
 	RzConfigNode *node = (RzConfigNode *)data;
@@ -2524,7 +2467,7 @@ static bool cb_binprefix(void *user, void *data) {
 			char *name = (char *)rz_file_basename(core->bin->file);
 			if (name) {
 				rz_name_filter(name, strlen(name), true);
-				rz_str_filter(name, strlen(name));
+				rz_str_filter(name);
 				core->bin->prefix = strdup(name);
 				free(name);
 			}
@@ -2865,15 +2808,7 @@ static bool cb_log_config_colors(void *coreptr, void *nodeptr) {
 static bool cb_dbg_verbose(void *user, void *data) {
 	RzCore *core = (RzCore *)user;
 	RzConfigNode *node = (RzConfigNode *)data;
-	const char *value = node->value;
-	switch (value[0]) {
-	case 't':
-	case 'T':
-		core->dbg->verbose = true;
-		break;
-	default:
-		core->dbg->verbose = false;
-	}
+	core->dbg->verbose = node->i_value;
 	return true;
 }
 
@@ -2963,7 +2898,6 @@ RZ_API int rz_core_config_init(RzCore *core) {
 	SETCB("analysis.armthumb", "false", &cb_analysis_armthumb, "aae computes arm/thumb changes (lot of false positives ahead)");
 	SETCB("analysis.jmp.after", "true", &cb_analysis_afterjmp, "Continue analysis after jmp/ujmp");
 	SETCB("analysis.trap.after", "false", &cb_analysis_aftertrap, "Continue analysis after trap instructions.");
-	SETCB("analysis.endsize", "true", &cb_analysis_endsize, "Adjust function size at the end of the analysis (known to be buggy)");
 	SETCB("analysis.delay", "true", &cb_analysis_delay, "Enable delay slot analysis if supported by the architecture");
 	SETICB("analysis.depth", 64, &cb_analysis_depth, "Max depth at code analysis"); // XXX: warn if depth is > 50 .. can be problematic
 	SETICB("analysis.graph_depth", 256, &cb_analysis_graphdepth, "Max depth for path search");
@@ -3084,7 +3018,6 @@ RZ_API int rz_core_config_init(RzCore *core) {
 	SETBPREF("asm.slow", "true", "Perform slow analysis operations in disasm");
 	SETBPREF("asm.decode", "false", "Use code analysis as a disassembler");
 	SETICB("asm.imm.hash", 0, &cb_asm_immhash, "Display # for immediates in ARM and Hexagon (0 = on)");
-	SETCB("asm.imm.sign", "true", &cb_asm_immsign, "False: Print signed immediates in unsigned representation. True: Print them with sign.");
 	SETBPREF("asm.imm.str", "true", "Show immediates values as strings");
 	SETBPREF("asm.imm.trim", "false", "Remove all offsets and constants from disassembly");
 	SETBPREF("asm.indent", "false", "Indent disassembly based on reflines depth");
@@ -3251,14 +3184,10 @@ RZ_API int rz_core_config_init(RzCore *core) {
 	SETDESC(n, "Default string encoding of binary");
 	SETOPTIONS(n, "ascii", "8bit", "utf8", "utf16le", "utf32le", "utf16be", "utf32be", "guess", NULL);
 	SETCB("bin.prefix", "", &cb_binprefix, "Prefix all symbols/sections/relocs with a specific string");
-	SETCB("bin.rawstr", "false", &cb_rawstr, "Load strings from raw binaries");
 	SETCB("bin.strings", "true", &cb_binstrings, "Load strings from rbin on startup");
 	SETCB("bin.debase64", "false", &cb_debase64, "Try to debase64 all strings");
 	SETBPREF("bin.classes", "true", "Load classes from rbin on startup");
 	SETCB("bin.verbose", "false", &cb_binverbose, "Show RzBin warnings when loading binaries");
-
-	/* plugins */
-	SETCB("plugins.hexagon.sdk", "false", &cb_hexsdk, "Print packet syntax in objdump style. Hexagon only.");
 
 	/* prj */
 	SETPREF("prj.file", "", "Path of the currently opened project");
@@ -3381,7 +3310,7 @@ RZ_API int rz_core_config_init(RzCore *core) {
 	SETBPREF("dbg.skipover", "false", "Make dso perform a dss (same goes for esil and visual/graph");
 	SETI("dbg.hwbp", 0, "Set HW or SW breakpoints");
 	SETCB("dbg.unlibs", "", &cb_dbg_unlibs, "If set stop when unloading matching libname");
-	SETCB("dbg.verbose", "true", &cb_dbg_verbose, "Verbose debug output");
+	SETCB("dbg.verbose", "false", &cb_dbg_verbose, "Verbose debug output");
 	SETBPREF("dbg.slow", "false", "Show stack and regs in visual mode in a slow but verbose mode");
 	SETBPREF("dbg.funcarg", "false", "Display arguments to function call in visual mode");
 
@@ -3618,7 +3547,6 @@ RZ_API int rz_core_config_init(RzCore *core) {
 	SETBPREF("scr.dumpcols", "false", "Prefer pC commands before p ones");
 	SETCB("scr.rows", "0", &cb_scrrows, "Force console row count (height) ");
 	SETICB("scr.rows", 0, &cb_rows, "Force console row count (height) (duplicate?)");
-	SETCB("scr.fps", "false", &cb_fps, "Show FPS in Visual");
 	SETICB("scr.fix.rows", 0, &cb_fixrows, "Workaround for Linux TTY");
 	SETICB("scr.fix.columns", 0, &cb_fixcolumns, "Workaround for Prompt iOS SSH client");
 	SETCB("scr.highlight", "", &cb_scrhighlight, "Highlight that word at RzCons level");
@@ -3635,6 +3563,7 @@ RZ_API int rz_core_config_init(RzCore *core) {
 	SETCB("scr.highlight.grep", "false", &cb_scr_color_grep_highlight, "Highlight (INVERT) the grepped words");
 	SETBPREF("scr.prompt.file", "false", "Show user prompt file (used by rizin -q)");
 	SETBPREF("scr.prompt.flag", "false", "Show flag name in the prompt");
+	SETBPREF("scr.prompt.flag.only", "false", "Show the flag name only in the prompt");
 	SETBPREF("scr.prompt.sect", "false", "Show section name in the prompt");
 	SETCB("scr.hist.block", "true", &cb_scr_histblock, "Use blocks for histogram");
 	SETCB("scr.prompt", "true", &cb_scrprompt, "Show user prompt (used by rizin -q)");

@@ -452,7 +452,10 @@ static char *langFromHashbang(RzCore *core, const char *file) {
 	return NULL;
 }
 
-RZ_API bool rz_core_run_script(RzCore *core, const char *file) {
+/* \brief Run the script defined by path in \p file. Could be a Rizin script, or rz-pipe one.
+ */
+RZ_API bool rz_core_run_script(RzCore *core, RZ_NONNULL const char *file) {
+	rz_return_val_if_fail(file, false);
 	bool ret = false;
 	RzListIter *iter;
 	RzLangPlugin *p;
@@ -460,7 +463,7 @@ RZ_API bool rz_core_run_script(RzCore *core, const char *file) {
 
 	rz_list_foreach (core->scriptstack, iter, name) {
 		if (!strcmp(file, name)) {
-			eprintf("WARNING: ignored nested source: %s\n", file);
+			RZ_LOG_WARN("Ignored nested source: '%s'\n", file);
 			return false;
 		}
 	}
@@ -637,7 +640,7 @@ RZ_IPI void rz_core_kuery_print(RzCore *core, const char *k) {
 }
 
 RZ_IPI int rz_cmd_kuery(void *data, const char *input) {
-	char buf[1024], *out;
+	char buf[1024], *out, *tofree;
 	RzCore *core = (RzCore *)data;
 	const char *sp, *p = "[sdb]> ";
 	Sdb *s = core->sdb;
@@ -646,9 +649,8 @@ RZ_IPI int rz_cmd_kuery(void *data, const char *input) {
 	char *temp_pos = NULL, *temp_cmd = NULL;
 
 	switch (input[0]) {
-
 	case 'j':
-		out = sdb_querys(s, NULL, 0, "analysis/**");
+		tofree = out = sdb_querys(s, NULL, 0, "analysis/**");
 		if (!out) {
 			rz_cons_println("No Output from sdb");
 			break;
@@ -687,6 +689,7 @@ RZ_IPI int rz_cmd_kuery(void *data, const char *input) {
 				}
 				temp_cmd = rz_str_ndup(temp, temp_pos - temp);
 				pj_s(pj, temp_cmd);
+				free(temp_cmd);
 				temp = temp_pos + 1;
 			}
 			out = cur_pos + 1;
@@ -700,6 +703,7 @@ RZ_IPI int rz_cmd_kuery(void *data, const char *input) {
 		RZ_FREE(next_cmd);
 		free(next_cmd);
 		free(cur_cmd);
+		free(tofree);
 		break;
 
 	case ' ':
@@ -3677,6 +3681,7 @@ DEFINE_HANDLE_TS_FCN_AND_SYMBOL(arged_stmt) {
 		free(command_str);
 		res = core_cmd_tsrzcmd(state->core, exec_string, state->split_lines, false);
 		free(exec_string);
+		free(command_extra_str);
 		return res;
 	}
 
@@ -4901,6 +4906,9 @@ static RzCmdStatus do_iter_sections(struct tsr2cmd_state *state, TSNode node, bo
 	RzListIter *iter;
 	rz_list_foreach (obj->sections, iter, sec) {
 		if ((sec->is_segment && show_sections) || (!sec->is_segment && !show_sections)) {
+			continue;
+		}
+		if (sec->vaddr == UT64_MAX) {
 			continue;
 		}
 		rz_core_seek(core, sec->vaddr, true);

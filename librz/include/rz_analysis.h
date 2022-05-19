@@ -535,7 +535,6 @@ typedef struct rz_analysis_options_t {
 	int nonull;
 	bool pushret; // analyze push+ret as jmp
 	bool armthumb; //
-	bool endsize; // chop function size which is known to be buggy but goodie too
 	bool delay;
 	int tailcall;
 	bool retpoline;
@@ -597,7 +596,6 @@ typedef struct rz_analysis_t {
 	bool recursive_noreturn; // analysis.rnr
 	RzSpaces zign_spaces;
 	char *zign_path; // dir.zigns
-	PrintfCallback cb_printf;
 	// moved from RzAnalysisFcn
 	Sdb *sdb; // root
 	HtUP /*<RzVector<RzAnalysisAddrHintRecord>>*/ *addr_hints; // all hints that correspond to a single address
@@ -903,11 +901,11 @@ typedef struct rz_analysis_task_item {
 } RzAnalysisTaskItem;
 
 typedef enum {
-	RZ_ANALYSIS_REF_TYPE_NULL = 0,
-	RZ_ANALYSIS_REF_TYPE_CODE = 'c', // code ref
-	RZ_ANALYSIS_REF_TYPE_CALL = 'C', // code ref (call)
-	RZ_ANALYSIS_REF_TYPE_DATA = 'd', // mem ref
-	RZ_ANALYSIS_REF_TYPE_STRING = 's' // string ref
+	RZ_ANALYSIS_XREF_TYPE_NULL = 0,
+	RZ_ANALYSIS_XREF_TYPE_CODE = 'c', // code ref
+	RZ_ANALYSIS_XREF_TYPE_CALL = 'C', // code ref (call)
+	RZ_ANALYSIS_XREF_TYPE_DATA = 'd', // mem ref
+	RZ_ANALYSIS_XREF_TYPE_STRING = 's' // string ref
 } RzAnalysisXRefType;
 
 typedef struct rz_analysis_ref_t {
@@ -1518,7 +1516,6 @@ RZ_API bool rz_analysis_esil_setup(RzAnalysisEsil *esil, RzAnalysis *analysis, i
 RZ_API void rz_analysis_esil_free(RzAnalysisEsil *esil);
 RZ_API bool rz_analysis_esil_runword(RzAnalysisEsil *esil, const char *word);
 RZ_API bool rz_analysis_esil_parse(RzAnalysisEsil *esil, const char *str);
-RZ_API bool rz_analysis_esil_dumpstack(RzAnalysisEsil *esil);
 RZ_API int rz_analysis_esil_mem_read(RzAnalysisEsil *esil, ut64 addr, ut8 *buf, int len);
 RZ_API int rz_analysis_esil_mem_write(RzAnalysisEsil *esil, ut64 addr, const ut8 *buf, int len);
 RZ_API int rz_analysis_esil_reg_read(RzAnalysisEsil *esil, const char *regname, ut64 *num, int *size);
@@ -1526,6 +1523,7 @@ RZ_API int rz_analysis_esil_reg_write(RzAnalysisEsil *esil, const char *dst, ut6
 RZ_API bool rz_analysis_esil_pushnum(RzAnalysisEsil *esil, ut64 num);
 RZ_API bool rz_analysis_esil_push(RzAnalysisEsil *esil, const char *str);
 RZ_API char *rz_analysis_esil_pop(RzAnalysisEsil *esil);
+RZ_API const char *rz_analysis_esil_trapstr(int type);
 RZ_API bool rz_analysis_esil_set_op(RzAnalysisEsil *esil, const char *op, RzAnalysisEsilOpCb code, ut32 push, ut32 pop, ut32 type);
 RZ_API void rz_analysis_esil_stack_free(RzAnalysisEsil *esil);
 RZ_API int rz_analysis_esil_get_parm_type(RzAnalysisEsil *esil, const char *str);
@@ -1782,10 +1780,10 @@ RZ_API bool rz_analysis_xrefs_init(RzAnalysis *analysis);
 #define RZ_ANALYSIS_THRESHOLDBB  0.7F
 
 /* diff.c */
-RZ_API RzAnalysisDiff *rz_analysis_diff_new(void);
+RZ_API RZ_OWN RzAnalysisDiff *rz_analysis_diff_new(void);
 RZ_API void rz_analysis_diff_setup(RzAnalysis *analysis, int doops, double thbb, double thfcn);
 RZ_API void rz_analysis_diff_setup_i(RzAnalysis *analysis, int doops, int thbb, int thfcn);
-RZ_API void *rz_analysis_diff_free(RzAnalysisDiff *diff);
+RZ_API void rz_analysis_diff_free(RzAnalysisDiff *diff);
 RZ_API int rz_analysis_diff_fingerprint_bb(RzAnalysis *analysis, RzAnalysisBlock *bb);
 RZ_API size_t rz_analysis_diff_fingerprint_fcn(RzAnalysis *analysis, RzAnalysisFunction *fcn);
 RZ_API bool rz_analysis_diff_bb(RzAnalysis *analysis, RzAnalysisFunction *fcn, RzAnalysisFunction *fcn2);
@@ -1837,8 +1835,6 @@ RZ_API RzList * /*<RzAnalysisRefline>*/ rz_analysis_reflines_get(RzAnalysis *ana
 RZ_API int rz_analysis_reflines_middle(RzAnalysis *analysis, RzList *list, ut64 addr, int len);
 RZ_API RzAnalysisRefStr *rz_analysis_reflines_str(void *core, ut64 addr, int opts);
 RZ_API void rz_analysis_reflines_str_free(RzAnalysisRefStr *refstr);
-/* TODO move to rz_core */
-RZ_API void rz_analysis_var_list_show(RzAnalysis *analysis, RzAnalysisFunction *fcn, int kind, int mode, PJ *pj);
 RZ_API RzList *rz_analysis_var_list(RzAnalysis *analysis, RzAnalysisFunction *fcn, int kind);
 RZ_API RZ_DEPRECATE RzList /*<RzAnalysisVar *>*/ *rz_analysis_var_all_list(RzAnalysis *analysis, RzAnalysisFunction *fcn);
 RZ_API RZ_DEPRECATE RzList /*<RzAnalysisVarField *>*/ *rz_analysis_function_get_var_fields(RzAnalysisFunction *fcn, int kind);
@@ -2205,6 +2201,21 @@ typedef void *RzSerializeAnalVarParser;
 RZ_API RzSerializeAnalVarParser rz_serialize_analysis_var_parser_new(void);
 RZ_API void rz_serialize_analysis_var_parser_free(RzSerializeAnalVarParser parser);
 RZ_API RZ_NULLABLE RzAnalysisVar *rz_serialize_analysis_var_load(RZ_NONNULL RzAnalysisFunction *fcn, RZ_NONNULL RzSerializeAnalVarParser parser, RZ_NONNULL const RzJson *json);
+
+/**
+ * Save useful infomation when analyze and disassemble bytes
+ * \see rz_core_analysis_bytes
+ */
+typedef struct analysis_bytes_t {
+	RzAnalysisOp *op;
+	RzAnalysisHint *hint;
+	char *opcode;
+	char *disasm;
+	char *pseudo;
+	char *description;
+	char *mask;
+	char *bytes;
+} RzAnalysisBytes;
 
 RZ_API void rz_serialize_analysis_functions_save(RZ_NONNULL Sdb *db, RZ_NONNULL RzAnalysis *analysis);
 RZ_API bool rz_serialize_analysis_functions_load(RZ_NONNULL Sdb *db, RZ_NONNULL RzAnalysis *analysis, RzSerializeAnalDiffParser diff_parser, RZ_NULLABLE RzSerializeResultInfo *res);

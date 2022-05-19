@@ -421,6 +421,10 @@ typedef int (*RzCoreSearchCallback)(RzCore *core, ut64 from, ut8 *buf, int len);
 #ifdef RZ_API
 RZ_API int rz_core_bind(RzCore *core, RzCoreBind *bnd);
 
+RZ_API void rz_core_notify_begin(RZ_NONNULL RzCore *core, RZ_NONNULL const char *format, ...) RZ_PRINTF_CHECK(2, 3);
+RZ_API void rz_core_notify_done(RZ_NONNULL RzCore *core, RZ_NONNULL const char *format, ...) RZ_PRINTF_CHECK(2, 3);
+RZ_API void rz_core_notify_error(RZ_NONNULL RzCore *core, RZ_NONNULL const char *format, ...) RZ_PRINTF_CHECK(2, 3);
+
 /**
  * \brief APIs to handle Visual Gadgets
  */
@@ -475,7 +479,7 @@ RZ_API int rz_core_cmd_file(RzCore *core, const char *file);
 RZ_API int rz_core_cmd_lines(RzCore *core, const char *lines);
 RZ_API RzCmdStatus rz_core_cmd_lines_rzshell(RzCore *core, const char *lines);
 RZ_API int rz_core_cmd_command(RzCore *core, const char *command);
-RZ_API bool rz_core_run_script(RzCore *core, const char *file);
+RZ_API bool rz_core_run_script(RzCore *core, RZ_NONNULL const char *file);
 RZ_API void rz_core_seek_item_free(RzCoreSeekItem *item);
 RZ_API bool rz_core_seek(RzCore *core, ut64 addr, bool rb);
 RZ_API bool rz_core_seek_and_save(RzCore *core, ut64 addr, bool rb);
@@ -535,7 +539,7 @@ RZ_API void rz_core_visual_asm(RzCore *core, ut64 addr);
 RZ_API void rz_core_visual_colors(RzCore *core);
 RZ_API void rz_core_visual_showcursor(RzCore *core, int x);
 RZ_API void rz_core_visual_offset(RzCore *core);
-RZ_API int rz_core_visual_hud(RzCore *core);
+RZ_API bool rz_core_visual_hud(RzCore *core);
 RZ_API void rz_core_visual_jump(RzCore *core, ut8 ch);
 RZ_API void rz_core_visual_disasm_up(RzCore *core, int *cols);
 RZ_API void rz_core_visual_disasm_down(RzCore *core, RzAsmOp *op, int *cols);
@@ -552,6 +556,10 @@ RZ_API bool cmd_analysis_objc(RzCore *core, bool auto_analysis);
 RZ_API void rz_core_analysis_cc_init(RzCore *core);
 RZ_API void rz_core_analysis_paths(RzCore *core, ut64 from, ut64 to, bool followCalls, int followDepth, bool is_json);
 RZ_API void rz_core_types_link(RzCore *core, const char *typestr, ut64 addr);
+RZ_API bool rz_core_analysis_esil_trace_start(RzCore *core);
+RZ_API bool rz_core_analysis_esil_trace_stop(RzCore *core);
+RZ_API void rz_analysis_bytes_free(RZ_NULLABLE void *ptr);
+RZ_API RZ_OWN RzPVector *rz_core_analysis_bytes(RZ_NONNULL RzCore *core, RZ_NONNULL const ut8 *buf, int len, int nops);
 
 RZ_API RzListInfo *rz_listinfo_new(const char *name, RzInterval pitv, RzInterval vitv, int perm, const char *extra);
 RZ_API void rz_listinfo_free(RzListInfo *info);
@@ -609,6 +617,7 @@ RZ_API RzCmdStatus rz_core_io_pcache_print(RzCore *core, RzIODesc *desc, RzCmdSt
 RZ_API RzReg *rz_core_reg_default(RzCore *core);
 RZ_API ut64 rz_core_reg_getv_by_role_or_name(RzCore *core, const char *name);
 RZ_API bool rz_core_reg_set_by_role_or_name(RzCore *core, const char *name, ut64 num);
+RZ_API void rz_core_reg_update_flags(RzCore *core);
 
 /* cdebug.c */
 RZ_API bool rz_core_is_debug(RzCore *core);
@@ -619,6 +628,16 @@ RZ_API void rz_core_debug_bp_add_noreturn_func(RzCore *core);
 RZ_API void rz_core_debug_ri(RzCore *core);
 RZ_API void rz_core_debug_set_register_flags(RzCore *core);
 RZ_API void rz_core_debug_clear_register_flags(RzCore *core);
+
+RZ_API bool rz_core_debug_process_close(RzCore *core);
+RZ_API bool rz_core_debug_step_until_frame(RzCore *core);
+RZ_API bool rz_core_debug_step_back(RzCore *core, int steps);
+RZ_API bool rz_core_debug_step_over(RzCore *core, int steps);
+RZ_API bool rz_core_debug_step_skip(RzCore *core, int times);
+RZ_API void rz_core_dbg_follow_seek_register(RzCore *core);
+
+RZ_API RZ_OWN RzList *rz_core_debug_backtraces(RzCore *core);
+RZ_API void rz_backtrace_free(RZ_NULLABLE RzBacktrace *bt);
 
 RZ_API RzCmdStatus rz_core_debug_plugins_print(RzCore *core, RzCmdStateOutput *state);
 
@@ -692,10 +711,11 @@ RZ_API RzCmdStatus rz_core_core_plugins_print(RzCore *core, RzCmdStateOutput *st
 /* cil.c */
 // TODO : They should have been there, but require `static` vars inside canalysis.c
 //      : Keep esil in canalysis.c, and split the rzil in cil.c
-RZ_API void rz_core_analysis_esil(RzCore *core, const char *str, const char *addr);
+RZ_API void rz_core_analysis_esil(RzCore *core, ut64 addr, ut64 size, RZ_NULLABLE RzAnalysisFunction *fcn);
 RZ_API bool rz_core_esil_cmd(RzAnalysisEsil *esil, const char *cmd, ut64 a1, ut64 a2);
 RZ_API int rz_core_esil_step(RzCore *core, ut64 until_addr, const char *until_expr, ut64 *prev_addr, bool stepOver);
 RZ_API int rz_core_esil_step_back(RzCore *core);
+RZ_API bool rz_core_esil_dumpstack(RzAnalysisEsil *esil);
 
 /* canalysis.c */
 RZ_API RzAnalysisOp *rz_core_analysis_op(RzCore *core, ut64 addr, int mask);
@@ -706,14 +726,15 @@ RZ_API void rz_core_analysis_undefine(RzCore *core, ut64 off);
 RZ_API void rz_core_analysis_hint_print(RzAnalysis *a, ut64 addr, RzCmdStateOutput *state);
 RZ_API void rz_core_analysis_hint_list_print(RzAnalysis *a, RzCmdStateOutput *state);
 RZ_API int rz_core_analysis_search(RzCore *core, ut64 from, ut64 to, ut64 ref, int mode);
-RZ_API int rz_core_analysis_search_xrefs(RzCore *core, ut64 from, ut64 to, PJ *pj, RzOutputMode out_mode);
+RZ_API int rz_core_analysis_search_xrefs(RzCore *core, ut64 from, ut64 to);
 RZ_API int rz_core_analysis_data(RzCore *core, ut64 addr, int count, int depth, int wordsize);
 RZ_API void rz_core_analysis_datarefs(RzCore *core, ut64 addr);
 RZ_API void rz_core_analysis_coderefs(RzCore *core, ut64 addr);
 RZ_API RzGraph /*RzGraphNodeInfo*/ *rz_core_analysis_codexrefs(RzCore *core, ut64 addr);
 RZ_API RzGraph /*RzGraphNodeInfo*/ *rz_core_analysis_importxrefs(RzCore *core);
 RZ_API void rz_core_analysis_callgraph(RzCore *core, ut64 addr, int fmt);
-RZ_API int rz_core_analysis_refs(RzCore *core, const char *input);
+RZ_API void rz_core_analysis_resolve_jumps(RZ_NONNULL RzCore *core);
+RZ_API bool rz_core_analysis_refs(RZ_NONNULL RzCore *core, size_t nbytes);
 RZ_API void rz_core_agraph_print(RzCore *core, int use_utf, const char *input);
 RZ_API void rz_core_analysis_flag_every_function(RzCore *core);
 RZ_API bool rz_core_analysis_function_rename(RzCore *core, ut64 addr, const char *_name);
@@ -722,7 +743,8 @@ RZ_API int rz_core_analysis_fcn(RzCore *core, ut64 at, ut64 from, int reftype, i
 RZ_API RZ_OWN char *rz_core_analysis_function_autoname(RZ_NONNULL RzCore *core, RZ_NONNULL RzAnalysisFunction *fcn);
 RZ_API void rz_core_analysis_function_strings_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzAnalysisFunction *fcn, RZ_NULLABLE PJ *pj);
 RZ_API void rz_core_analysis_autoname_all_fcns(RzCore *core);
-RZ_API void rz_core_analysis_autoname_all_golang_fcns(RzCore *core);
+RZ_API bool rz_core_analysis_recover_golang_functions(RzCore *core);
+RZ_API void rz_core_analysis_resolve_golang_strings(RzCore *core);
 RZ_API char *rz_core_analysis_fcn_name(RzCore *core, RzAnalysisFunction *fcn);
 RZ_API int rz_core_analysis_fcn_clean(RzCore *core, ut64 addr);
 RZ_API int rz_core_print_bb_custom(RzCore *core, RzAnalysisFunction *fcn);
@@ -731,12 +753,15 @@ RZ_API bool rz_core_analysis_graph(RzCore *core, ut64 addr, int opts);
 RZ_API RzList *rz_core_analysis_graph_to(RzCore *core, ut64 addr, int n);
 RZ_API int rz_core_analysis_all(RzCore *core);
 RZ_API bool rz_core_analysis_everything(RzCore *core, bool experimental, char *dh_orig);
-RZ_API bool rz_core_analysis_sigdb_apply(RzCore *core, int *n_applied, const char *filter);
-RZ_API void rz_core_analysis_sigdb_print(RzCore *core);
+RZ_API bool rz_core_analysis_sigdb_apply(RZ_NONNULL RzCore *core, RZ_NULLABLE int *n_applied, RZ_NULLABLE const char *filter);
+RZ_API void rz_core_analysis_sigdb_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzTable *table);
 RZ_API RzList *rz_core_analysis_cycles(RzCore *core, int ccl);
 RZ_API RzList *rz_core_analysis_fcn_get_calls(RzCore *core, RzAnalysisFunction *fcn); // get all calls from a function
-RZ_API void rz_cmd_analysis_calls(RzCore *core, const char *input, bool printCommands, bool importsOnly);
+RZ_API void rz_core_analysis_calls(RZ_NONNULL RzCore *core, bool imports_only);
 RZ_API int rz_core_get_stacksz(RzCore *core, ut64 from, ut64 to);
+RZ_API bool rz_core_analysis_hint_set_offset(RZ_NONNULL RzCore *core, RZ_NONNULL const char *struct_member);
+RZ_API bool rz_core_analysis_continue_until_syscall(RZ_NONNULL RzCore *core);
+RZ_API bool rz_core_analysis_continue_until_call(RZ_NONNULL RzCore *core);
 
 /*tp.c*/
 RZ_API void rz_core_analysis_type_match(RzCore *core, RzAnalysisFunction *fcn, HtUU *addr_loop_table);
@@ -923,6 +948,7 @@ RZ_API bool rz_core_bin_main_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile
 RZ_API bool rz_core_bin_relocs_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state);
 RZ_API bool rz_core_bin_sections_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state, RzCoreBinFilter *filter, RzList *hashes);
 RZ_API bool rz_core_bin_cur_section_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state, RzList *hashes);
+RZ_API bool rz_core_bin_cur_segment_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state, RzList *hashes);
 RZ_API bool rz_core_bin_segments_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state, RzCoreBinFilter *filter, RzList *hashes);
 RZ_API bool rz_core_bin_strings_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state);
 RZ_API bool rz_core_bin_whole_strings_print(RZ_NONNULL RzCore *core, RZ_NONNULL RzBinFile *bf, RZ_NONNULL RzCmdStateOutput *state);
@@ -977,7 +1003,7 @@ RZ_API int rz_core_visual_prompt(RzCore *core);
 RZ_API bool rz_core_visual_esil(RzCore *core);
 RZ_API int rz_core_search_preludes(RzCore *core, bool log);
 RZ_API int rz_core_search_prelude(RzCore *core, ut64 from, ut64 to, const ut8 *buf, int blen, const ut8 *mask, int mlen);
-RZ_API RzList * /*<RzIOMap*>*/ rz_core_get_boundaries_prot(RzCore *core, int protection, const char *mode, const char *prefix);
+RZ_API RZ_OWN RzList * /*<RzIOMap*>*/ rz_core_get_boundaries_prot(RzCore *core, int protection, const char *mode, const char *prefix);
 
 RZ_API void rz_core_hack_help(const RzCore *core);
 RZ_API bool rz_core_hack(RzCore *core, const char *op);
@@ -1018,8 +1044,7 @@ RZ_API void rz_core_analysis_stats_free(RzCoreAnalStats *s);
 RZ_API int rz_line_hist_offset_up(RzLine *line);
 RZ_API int rz_line_hist_offset_down(RzLine *line);
 
-// TODO : move into debug or syscall++
-RZ_API char *cmd_syscall_dostr(RzCore *core, st64 num, ut64 addr);
+RZ_API RZ_OWN char *rz_core_syscall_as_string(RzCore *core, st64 num, ut64 addr);
 
 /* tasks */
 
@@ -1120,6 +1145,7 @@ RZ_API ut16 rz_core_flirt_app_from_option_list(RZ_NONNULL const char *app_list);
 
 /* PLUGINS */
 extern RzCorePlugin rz_core_plugin_java;
+extern RzCorePlugin rz_core_plugin_dex;
 
 /* DECOMPILER PRINTING FUNCTIONS */
 /**
@@ -1173,6 +1199,12 @@ RZ_API bool rz_serialize_core_load(RZ_NONNULL Sdb *db, RZ_NONNULL RzCore *core, 
 RZ_API bool rz_core_project_load_for_cli(RzCore *core, const char *file, bool load_bin_io);
 
 RZ_API bool rz_arch_platform_add_flags_comments(RzCore *core);
+
+/* regs */
+/// Callback for synchronizing register state in commands (only relevant for debug, not for analysis)
+typedef bool (*RzCmdRegSync)(RzCore *core, RzRegisterType type, bool write);
+RZ_API bool rz_core_reg_assign_sync(RZ_NONNULL RzCore *core, RZ_NONNULL RzReg *reg, RzCmdRegSync sync_cb, RZ_NONNULL const char *name, ut64 val);
+RZ_API RZ_OWN RzList *rz_core_reg_filter_items_sync(RZ_NONNULL RzCore *core, RZ_NONNULL RzReg *reg, RzCmdRegSync sync_cb, RZ_NULLABLE const char *filter);
 
 #endif
 
